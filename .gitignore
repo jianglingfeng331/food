@@ -1,0 +1,57 @@
+# ===== macOS =====
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===== Xcode / user state =====
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# ===== Xcode / build output =====
+build/
+DerivedData/
+*.ipa
+*.dSYM
+*.dSYM.zip
+.swiftpm/
+
+# ===== CocoaPods =====
+Pods/
+
+# ===== Android =====
+*.iml
+.gradle/
+local.properties
+.idea/
+*.keystore
+!debug.keystore
+android/**/build/
+android/app/debug/
+android/app/release/
+captures/
+
+# ===== Python (server / tools) =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# ===== Editor =====
+.vscode/
+.idea/
+*.swp
+*~
+
+# ===== Logs =====
+*.log
