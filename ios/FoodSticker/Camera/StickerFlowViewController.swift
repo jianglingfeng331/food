@@ -309,10 +309,17 @@ extension StickerFlowViewController: AVCapturePhotoCaptureDelegate {
 
 extension StickerFlowViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        picker.dismiss(animated: true)
-        results.first?.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] obj, _ in
-            guard let img = obj as? UIImage else { return }
-            DispatchQueue.main.async { self?.process(image: img) }
+        guard let provider = results.first?.itemProvider,
+              provider.canLoadObject(ofClass: UIImage.self) else {
+            picker.dismiss(animated: true)
+            return
+        }
+        // 先 dismiss，等动画完成后再加载图片，避免 PHPicker 内部 MachPort 竞态。
+        picker.dismiss(animated: true) { [weak self] in
+            provider.loadObject(ofClass: UIImage.self) { obj, _ in
+                guard let img = obj as? UIImage else { return }
+                DispatchQueue.main.async { self?.process(image: img) }
+            }
         }
     }
 }
