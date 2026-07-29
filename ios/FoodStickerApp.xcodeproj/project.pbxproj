@@ -57,6 +57,10 @@
 		B20000000000000000000D /* NotoSansSC-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000E /* NotoSansSC-Variable.ttf */; };
 		B20000000000000000000E /* NotoSerifSC-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000F /* NotoSerifSC-Regular.ttf */; };
 		B20000000000000000000F /* NotoSerifSC-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F200000000000000000010 /* NotoSerifSC-Bold.ttf */; };
+		B400000000000000000001 /* RealTimeSegmentationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000001 /* RealTimeSegmentationEngine.swift */; };
+		B400000000000000000002 /* StickerRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000002 /* StickerRenderer.swift */; };
+		B400000000000000000003 /* StickerAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000003 /* StickerAIService.swift */; };
+		B400000000000000000004 /* StickerFlowViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000004 /* StickerFlowViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -112,6 +116,10 @@
 		F20000000000000000000F /* NotoSerifSC-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = NotoSerifSC-Regular.ttf; sourceTree = "<group>"; };
 		F200000000000000000010 /* NotoSerifSC-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = NotoSerifSC-Bold.ttf; sourceTree = "<group>"; };
 		F300000000000000000001 /* FoodStickerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FoodStickerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F400000000000000000001 /* RealTimeSegmentationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealTimeSegmentationEngine.swift; sourceTree = "<group>"; };
+		F400000000000000000002 /* StickerRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerRenderer.swift; sourceTree = "<group>"; };
+		F400000000000000000003 /* StickerAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerAIService.swift; sourceTree = "<group>"; };
+		F400000000000000000004 /* StickerFlowViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerFlowViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +146,7 @@
 			children = (
 				G110000000000000000001 /* App */,
 				G110000000000000000002 /* Camera */,
+				G400000000000000000001 /* Segmentation */,
 				G110000000000000000003 /* ML */,
 				G110000000000000000004 /* Cloud */,
 				G110000000000000000005 /* Nutrition */,
@@ -170,11 +179,20 @@
 			isa = PBXGroup;
 			children = (
 				F100000000000000000004 /* CameraViewController.swift */,
+				F400000000000000000004 /* StickerFlowViewController.swift */,
 			);
 			path = Camera;
 			sourceTree = "<group>";
 		};
-		G110000000000000000003 /* ML */ = {
+			G400000000000000000001 /* Segmentation */ = {
+		isa = PBXGroup;
+		children = (
+			F400000000000000000001 /* RealTimeSegmentationEngine.swift */,
+		);
+		path = Segmentation;
+		sourceTree = "<group>";
+	};
+G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F100000000000000000005 /* CartoonizeEngine.swift */,
@@ -189,6 +207,7 @@
 			isa = PBXGroup;
 			children = (
 				F100000000000000000009 /* CloudAPI.swift */,
+				F400000000000000000003 /* StickerAIService.swift */,
 			);
 			path = Cloud;
 			sourceTree = "<group>";
@@ -213,6 +232,7 @@
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000C /* StickerComposer.swift */,
+				F400000000000000000002 /* StickerRenderer.swift */,
 			);
 			path = Sticker;
 			sourceTree = "<group>";
@@ -477,6 +497,10 @@
 				B10000000000000000001F /* HomeModals.swift in Sources */,
 				B100000000000000000022 /* AppFont.swift in Sources */,
 				B100000000000000000023 /* CameraPage.swift in Sources */,
+				B400000000000000000001 /* RealTimeSegmentationEngine.swift in Sources */,
+				B400000000000000000002 /* StickerRenderer.swift in Sources */,
+				B400000000000000000003 /* StickerAIService.swift in Sources */,
+				B400000000000000000004 /* StickerFlowViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
