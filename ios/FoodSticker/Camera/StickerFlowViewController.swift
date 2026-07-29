@@ -16,15 +16,11 @@ final class StickerFlowViewController: UIViewController {
     // MARK: - 相机
     private let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
-    private let videoOutput = AVCaptureVideoDataOutput()
     private var previewLayer: AVCaptureVideoPreviewLayer?
-    private let captureQueue = DispatchQueue(label: "foodsticker.flow.capture")
-    private var isSegmenting = false
 
     // MARK: - UI
     private let previewContainer = UIView()
     private let roiView = ROIView()              // 黄色 ROI 选框
-    private let livePreview = UIImageView()      // 实时抠图预览（右上角小窗）
     private let resultView = UIImageView()       // 最终结果
     private let statusLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .large)
@@ -70,12 +66,6 @@ final class StickerFlowViewController: UIViewController {
 
         roiView.translatesAutoresizingMaskIntoConstraints = false
         previewContainer.addSubview(roiView)
-
-        livePreview.contentMode = .scaleAspectFit
-        livePreview.layer.borderColor = UIColor.systemYellow.cgColor
-        livePreview.layer.borderWidth = 1
-        livePreview.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(livePreview)
 
         resultView.contentMode = .scaleAspectFit
         resultView.isHidden = true
@@ -149,11 +139,6 @@ final class StickerFlowViewController: UIViewController {
             albumBtn.widthAnchor.constraint(equalToConstant: 56),
             albumBtn.heightAnchor.constraint(equalToConstant: 44),
 
-            livePreview.topAnchor.constraint(equalTo: albumBtn.bottomAnchor, constant: 12),
-            livePreview.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            livePreview.widthAnchor.constraint(equalToConstant: 110),
-            livePreview.heightAnchor.constraint(equalToConstant: 110),
-
             saveBtn.bottomAnchor.constraint(equalTo: generateBtn.topAnchor, constant: -12),
             saveBtn.leadingAnchor.constraint(equalTo: generateBtn.leadingAnchor),
             saveBtn.trailingAnchor.constraint(equalTo: generateBtn.trailingAnchor),
@@ -188,19 +173,12 @@ final class StickerFlowViewController: UIViewController {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input),
-              session.canAddOutput(photoOutput),
-              session.canAddOutput(videoOutput) else {
+              session.canAddOutput(photoOutput) else {
             setStatus("无法访问摄像头")
             return
         }
         session.addInput(input)
         session.addOutput(photoOutput)
-        session.addOutput(videoOutput)
-        videoOutput.alwaysDiscardsLateVideoFrames = true
-        if let conn = videoOutput.connection(with: .video) {
-            conn.videoOrientation = .portrait
-        }
-        videoOutput.setSampleBufferDelegate(self, queue: captureQueue)
 
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
@@ -228,8 +206,7 @@ final class StickerFlowViewController: UIViewController {
         }
     }
 
-    // MARK: - 实时预览抠图回调（演示 engine.segmentPreviewFrame）
-
+    /// 将 ROI 选框坐标归一化到预览容器坐标系（0~1）。
     private func normalizedROI() -> CGRect? {
         let b = previewContainer.bounds
         guard !b.isEmpty else { return nil }
@@ -325,22 +302,6 @@ extension StickerFlowViewController: AVCapturePhotoCaptureDelegate {
             return
         }
         process(image: img)
-    }
-}
-
-// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate（实时预览抠图）
-
-extension StickerFlowViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput,
-                       didOutput sampleBuffer: CMSampleBuffer,
-                       from connection: AVCaptureConnection) {
-        guard !isSegmenting else { return }
-        isSegmenting = true
-        engine.roi = normalizedROI()
-        engine.segmentPreviewFrame(sampleBuffer, maxSide: 384) { [weak self] img in
-            self?.livePreview.image = img
-            self?.isSegmenting = false
-        }
     }
 }
 
