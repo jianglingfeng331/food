@@ -44,16 +44,30 @@ final class RealTimeSegmentationEngine {
 
     // MARK: - 高清抓拍抠图接口
 
+    // Vision mask 在高分辨率（>2048px）图像上可能触发 mach_vm_allocate OOM。
+    private static let maxSegmentationSide: CGFloat = 2048
+
     /// 输入原始 `UIImage`（建议先转正方向），输出透明前景 `UIImage`。
     public func segmentStill(image: UIImage, roi: CGRect? = nil) -> UIImage? {
         let region = roi ?? self.roi
         guard let cg = image.cgImage else { return nil }
 
+        // 分辨率守卫：过大图像先降采样，防止 Vision mask buffer OOM。
+        let inputCG: CGImage
+        let maxDim = max(CGFloat(cg.width), CGFloat(cg.height))
+        if maxDim > Self.maxSegmentationSide {
+            let downImage = image.resized(maxSide: Self.maxSegmentationSide)
+            guard let downCG = downImage.cgImage else { return nil }
+            inputCG = downCG
+        } else {
+            inputCG = cg
+        }
+
         if #available(iOS 17.0, *) {
-            return segmentNative(cgImage: cg, roi: region)
+            return segmentNative(cgImage: inputCG, roi: region)
         }
         if #available(iOS 15.0, *) {
-            return segmentPersonSaliency(cgImage: cg, roi: region)
+            return segmentPersonSaliency(cgImage: inputCG, roi: region)
         }
         // iOS 14 及以下无 ML 分割能力，回退到软蒙版。
         return segmentSoftFallback(image: image, roi: region)

@@ -6,15 +6,11 @@ final class CloudAPI {
     static let shared = CloudAPI()
 
     /// 本地联调地址：
-    /// - 模拟器用 127.0.0.1（本机 FastAPI）
-    /// - 真机调试请改成电脑局域网 IP，例如 http://192.168.1.10:8000（并保持后端在运行）
+    /// - 模拟器用 127.0.0.1（本机 FastAPI）。
+    /// - 真机调试需改为 Mac 局域网 IP（如 192.168.1.10:8000），并保持后端运行。
     #if DEBUG
     private var base: URL {
-        #if targetEnvironment(simulator)
         return URL(string: "http://127.0.0.1:8000")!
-        #else
-        return URL(string: "http://192.168.21.228:8000")!   // TODO: 改成你电脑的实际局域网 IP
-        #endif
     }
     #else
     private var base = URL(string: "https://api.yourserver.com")!
@@ -22,7 +18,7 @@ final class CloudAPI {
 
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 15   // 云端全流程要求 ≤3s，超时快速失败
+        cfg.timeoutIntervalForRequest = 8    // 超时快速失败，避免阻塞 UI
         return URLSession(configuration: cfg)
     }()
 
