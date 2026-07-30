@@ -171,9 +171,6 @@ final class RealTimeSegmentationEngine {
     /// 将 Vision 输出的单通道蒙版 buffer 羽化后合成透明前景。
     /// - 对蒙版施加小半径高斯模糊 → 消除像素级锯齿 → 边缘平滑过渡。
     private func composite(cgImage: CGImage, maskBuffer: CVPixelBuffer) -> UIImage? {
-        let w = CVPixelBufferGetWidth(maskBuffer)
-        let h = CVPixelBufferGetHeight(maskBuffer)
-
         // 1) 生成羽毛化的蒙版 CGImage
         guard let featheredMaskCG = featherMask(maskBuffer) else { return nil }
 

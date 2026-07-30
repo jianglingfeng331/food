@@ -219,12 +219,12 @@ final class StickerFlowViewController: UIViewController {
     @objc private func generate() {
         #if targetEnvironment(simulator)
         openAlbum()
-        return
-        #endif
+        #else
         setStatus("高清抠图中…")
         spinner.startAnimating()
         let settings = AVCapturePhotoSettings()
         photoOutput.capturePhoto(with: settings, delegate: self)
+        #endif
     }
 
     /// 统一处理：原图 → 高清抠图 → 渲染贴纸 → AI 风格化 → 展示。
