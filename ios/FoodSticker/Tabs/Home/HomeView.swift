@@ -3,16 +3,17 @@ import SwiftUI
 // MARK: - 首页主视图
 
 struct HomeView: View {
-    let nickname: String = "小鹿"
     /// 点击右上角「我的」头像时触发（由 HomeViewController 注入，present 个人中心页）
     var onProfile: (() -> Void)? = nil
 
-    // 模拟数据 (实际应来自 AppDataStore)
-    @State private var exerciseCalories: Int = 256
-    @State private var waterAmount: Int = 1050
-    @State private var weight: String? = nil
-    @State private var weightMeta: String = "点击加号记录 · 上次 08:15"
+    // MARK: - 数据源
 
+    @ObservedObject private var store = AppDataStore.shared
+
+    /// 从 Repository 异步加载的仪表盘数据（PK 分数、昵称、目标等）
+    @State private var dashboardData: DashboardData?
+
+    // 运动·饮水·体重弹窗
     @State private var activeSheet: ActiveSheet?
     @State private var savedSports: [SavedSport] = []
 
@@ -21,46 +22,96 @@ struct HomeView: View {
         var id: Int { hashValue }
     }
 
-    // MARK: - 模拟数据
+    // MARK: - 派生数据（全部由 AppDataStore + Repository 驱动）
 
-    private var user1: PKUserInfo {
-        PKUserInfo(
-            name: "小鹿",
+    /// 昵称：仪表盘 → 用户资料 → 后备
+    private var displayNickname: String {
+        if store.dashboardRepo is GuestDashboardRepository { return "未登录" }
+        return dashboardData?.myNickname ?? store.profile.name
+    }
+
+    // MARK: PK 双方数据
+
+    private var pkMe: PKUserInfo {
+        let refGoal = max(Double(dashboardData?.todayCalorieGoal ?? store.profile.calorieTarget), 100)
+        let score = dashboardData?.myScore ?? store.todayCaloriesConsumed
+        return PKUserInfo(
+            name: displayNickname,
             avatar: "AvatarMe",
-            score: 1420,
-            progress: 72,
+            score: score,
+            progress: min(100, Double(score) / refGoal * 100),
             isSelf: true,
             isLeader: false
         )
     }
 
-    private var user2: PKUserInfo {
-        PKUserInfo(
-            name: "小宇",
+    private var pkRival: PKUserInfo {
+        let refGoal = max(Double(dashboardData?.todayCalorieGoal ?? store.profile.calorieTarget), 100)
+        let score = dashboardData?.opponentScore ?? 0
+        return PKUserInfo(
+            name: dashboardData?.opponentNickname ?? "暂无对手",
             avatar: "AvatarRival",
-            score: 1080,
-            progress: 58,
+            score: score,
+            progress: min(100, Double(score) / refGoal * 100),
             isSelf: false,
-            isLeader: true
+            isLeader: dashboardData?.opponentIsLeader ?? false
         )
     }
 
-    // CalorieCard 数据
-    private let intake: Int = 1450
-    private let target: Int = 1500
-    private var burned: Int { exerciseCalories + 174 }
-    private var remaining: Int {
-        max(0, target - intake + exerciseCalories)
+    // MARK: 热量卡
+
+    private var intake: Int { store.todayCaloriesConsumed }
+    private var calorieTarget: Int {
+        dashboardData?.todayCalorieGoal ?? store.profile.calorieTarget
     }
+    private var exerciseCals: Int { store.todayExerciseCalories }
+    private var burned: Int { exerciseCals + 174 }
+    private var remaining: Int { max(0, calorieTarget - intake + exerciseCals) }
+
+    // MARK: 进度条
 
     private var exerciseProgress: Double {
-        min(100, Double(exerciseCalories) / 700.0 * 100.0)
+        min(100, Double(exerciseCals) / 700.0 * 100.0)
     }
+
     private var waterProgress: Double {
-        min(100, Double(waterAmount) / 2500.0 * 100.0)
+        min(100, Double(store.todayWaterIntake)
+            / Double(dashboardData?.waterGoalML ?? 2000) * 100.0)
     }
+
     private var weightProgress: Double {
-        weight != nil ? 50 : 0
+        store.todayWeight > 0 ? 50 : 0
+    }
+
+    // MARK: 体重显示
+
+    private var weightText: String? {
+        let w = store.todayWeight
+        guard w > 0 else { return nil }
+        return String(format: "%.1f kg", w)
+    }
+
+    private var weightMetaText: String {
+        if store.todayWeight > 0 {
+            return "已记录 · 点击可修改"
+        }
+        return "点击加号记录 · 上次 \(dashboardData?.lastWeightTime ?? "--:--")"
+    }
+
+    // MARK: 运动 meta
+
+    private var exerciseMetaText: String {
+        let recs = store.todayRecords.filter { $0.type == .exercise }
+        if recs.isEmpty { return "今日运动 · 暂无记录" }
+        return "今日运动 · 上次记录 \(recs.last!.time)"
+    }
+
+    // MARK: 饮水 meta
+
+    private var waterMetaText: String {
+        let goal = dashboardData?.waterGoalML ?? 2000
+        return String(format: "目标 %.1fL · 今日已记录",
+                      Double(goal) / 1000.0)
     }
 
     // MARK: - Body
@@ -75,35 +126,35 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     // 1. 顶部栏
-                    TopBarView(nickname: nickname, onProfileTap: onProfile)
+                    TopBarView(nickname: displayNickname, onProfileTap: onProfile)
 
-                    // 2. 主内容区 (对应 Web <main>)
+                    // 2. 主内容区
                     VStack(spacing: 0) {
                         // PK 卡片
-                        PKCardView(user1: user1, user2: user2)
+                        PKCardView(user1: pkMe, user2: pkRival)
 
                         // 热量概览
                         CalorieCardView(
                             intake: intake,
                             burned: burned,
                             remaining: remaining,
-                            target: target
+                            target: calorieTarget
                         )
 
                         // 运动消耗
                         ActionRowView(
                             type: .exercise,
                             progress: exerciseProgress,
-                            value: "\(exerciseCalories) kcal",
-                            meta: "今日运动 · 上次记录 18:30",
+                            value: "\(exerciseCals) kcal",
+                            meta: exerciseMetaText,
                             onTap: { activeSheet = .exercise }
                         )
 
                         // 今日体重
                         WeightRowView(
-                            weight: weight,
+                            weight: weightText,
                             progress: weightProgress,
-                            meta: weightMeta,
+                            meta: weightMetaText,
                             onTap: { activeSheet = .weight }
                         )
 
@@ -111,12 +162,13 @@ struct HomeView: View {
                         ActionRowView(
                             type: .water,
                             progress: waterProgress,
-                            value: String(format: "%.2fL", Double(waterAmount) / 1000.0),
-                            meta: "目标 2.5L · 上次 19:20",
+                            value: String(format: "%.2fL",
+                                          Double(store.todayWaterIntake) / 1000.0),
+                            meta: waterMetaText,
                             onTap: { activeSheet = .water }
                         )
 
-                        // 底部留白 (对应 Web <div h-[16px]>)
+                        // 底部留白
                         Spacer().frame(height: 16)
                     }
                     .padding(.top, HomeTokens.Spacing.mainTop)
@@ -126,7 +178,7 @@ struct HomeView: View {
             }
             .disabled(activeSheet != nil)
 
-            // 弹窗层：以内嵌浮层呈现（半透明遮罩可透出首页，非全屏漆黑）
+            // 弹窗层
             if let sheet = activeSheet {
                 modalContent(for: sheet)
                     .transition(.move(edge: .bottom))
@@ -134,9 +186,25 @@ struct HomeView: View {
             }
         }
         .animation(.easeInOut(duration: 0.28), value: activeSheet)
+        .task {
+            // 确保仓库匹配当前登录态
+            store.refreshDashboardRepo()
+            let repo = store.dashboardRepo
+            do {
+                let data = try await repo.fetchDashboard()
+                // 合并仪表盘数据到用户资料（昵称、目标）
+                if let name = data.myNickname, !name.isEmpty {
+                    store.profile.name = name
+                }
+                store.profile.calorieTarget = data.todayCalorieGoal
+                dashboardData = data
+            } catch {
+                print("[HomeView] Dashboard fetch failed: \(error)")
+            }
+        }
     }
 
-    // MARK: - 弹窗内容（对照 Web 端 addExercise / setWeight / setWaterAmount）
+    // MARK: - 弹窗内容（回调写回 AppDataStore）
 
     @ViewBuilder
     private func modalContent(for sheet: ActiveSheet) -> some View {
@@ -145,26 +213,35 @@ struct HomeView: View {
             AnyView(ExerciseModalView(
                 savedSports: $savedSports,
                 onConfirm: { _, calories in
-                    exerciseCalories = min(1200, exerciseCalories + calories)
+                    let record = DailyRecord(
+                        type: .exercise, name: "运动",
+                        calories: calories, amount: 30)
+                    store.addRecord(record)
                     activeSheet = nil
                 },
                 onDismiss: { activeSheet = nil }
             ))
         case .weight:
             AnyView(WeightModalView(
-                initial: weight,
+                initial: weightText,
                 onConfirm: { v in
-                    weight = String(format: "%.1f kg", v)
-                    weightMeta = "已记录 · 点击可修改"
+                    let record = DailyRecord(
+                        type: .weight, name: "今日体重",
+                        calories: 0, amount: v, unit: "kg")
+                    store.replaceRecords(ofType: .weight, with: [record])
                     activeSheet = nil
                 },
                 onDismiss: { activeSheet = nil }
             ))
         case .water:
             AnyView(WaterModalView(
-                initial: waterAmount,
+                initial: store.todayWaterIntake,
                 onConfirm: { v in
-                    waterAmount = min(3000, v)
+                    let total = min(3000, v)
+                    let record = DailyRecord(
+                        type: .water, name: "饮水",
+                        calories: 0, amount: Double(total), unit: "ml")
+                    store.replaceRecords(ofType: .water, with: [record])
                     activeSheet = nil
                 },
                 onDismiss: { activeSheet = nil }

@@ -106,8 +106,8 @@ final class AppDataStore: ObservableObject {
     }
 
     // 用户信息
-    var profile = UserProfile()
-    var partnerProfile: UserProfile = {
+    @Published var profile = UserProfile()
+    @Published var partnerProfile: UserProfile = {
         var p = UserProfile()
         p.name = "小鹿"; p.avatar = "🦌"; p.currentWeight = 63.2; p.targetWeight = 58
         p.height = 165; p.days = 18; p.waterGoal = 1800; p.calorieTarget = 1400
@@ -184,7 +184,30 @@ final class AppDataStore: ObservableObject {
         Task { try? await CloudAPI.shared.deleteRecord(id: id) }
     }
 
-    /// 加入“我的贴纸/预设”列表：同名食物去重（替换旧记录），始终插到最前
+    /// 替换指定类型的所有今日记录（用于体重/饮水等覆盖式更新）
+    func replaceRecords(ofType type: RecordType, with records: [DailyRecord]) {
+        todayRecords.removeAll { $0.type == type }
+        todayRecords.append(contentsOf: records)
+        persistRecords()
+    }
+
+    /// 加载仪表盘数据并合并至本地状态（首页 onAppear 专用）
+    func bootstrapDashboardIfNeeded() async {
+        let repo = dashboardRepo
+        do {
+            let data = try await repo.fetchDashboard()
+            await MainActor.run {
+                if let name = data.myNickname, !name.isEmpty {
+                    profile.name = name
+                }
+                profile.calorieTarget = data.todayCalorieGoal
+            }
+        } catch {
+            print("[AppDataStore] Dashboard bootstrap failed: \(error)")
+        }
+    }
+
+    /// 加入"我的贴纸/预设"列表：同名食物去重（替换旧记录），始终插到最前
     func addSavedSticker(_ s: FoodSticker) {
         savedStickers.removeAll { $0.name == s.name }
         savedStickers.insert(s, at: 0)
@@ -200,6 +223,8 @@ final class AppDataStore: ObservableObject {
     /// 已登录（AuthService 有用户）：尝试用 CloudAPI 同步真实数据（失败则保留本地）。
     @MainActor
     func bootstrap() async {
+        // 根据登录态设置正确的数据仓库
+        refreshDashboardRepo()
         guard AuthService.shared.isLoggedIn else {
             // 游客：仅确保本地记录已就绪（无需云端）
             return
