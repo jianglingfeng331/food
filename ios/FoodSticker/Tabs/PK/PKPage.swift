@@ -224,10 +224,12 @@ struct PKSectionTitle: View {
 
 // Legend：两色圆点图例
 struct PKLegend: View {
+    var meName: String = PKMock.me.name
+    var rivalName: String = PKMock.rival.name
     var body: some View {
         HStack(spacing: 14) {
-            legendItem(color: PKTokens.Color.me, name: PKMock.me.name)
-            legendItem(color: PKTokens.Color.rival, name: PKMock.rival.name)
+            legendItem(color: PKTokens.Color.me, name: meName)
+            legendItem(color: PKTokens.Color.rival, name: rivalName)
         }
     }
     private func legendItem(color: Color, name: String) -> some View {
@@ -289,7 +291,12 @@ struct SwordsGlyph: View {
 // MARK: =====================================================================
 
 struct BattleReportCard: View {
-    private let metrics = PKMock.metrics
+    var meUser: PKUser = PKMock.me
+    var rivalUser: PKUser = PKMock.rival
+    var leaderIsMe: Bool = PKMock.leaderIsMe
+    var meWins: Int = PKMock.meWins
+    var rivalWins: Int = PKMock.rivalWins
+    var metrics: [PKMock.Metric] = PKMock.metrics
 
     var body: some View {
         VStack(spacing: 0) {
@@ -318,8 +325,8 @@ struct BattleReportCard: View {
 
             // 对手头部
             HStack(alignment: .top, spacing: 0) {
-                userColumn(user: PKMock.me, crowned: PKMock.leaderIsMe,
-                           wins: PKMock.meWins,
+                userColumn(user: meUser, crowned: leaderIsMe,
+                           wins: meWins,
                            badgeBg: PKTokens.Color.primaryBg10,
                            badgeFg: PKTokens.Color.primary)
                     .frame(maxWidth: .infinity)
@@ -336,8 +343,8 @@ struct BattleReportCard: View {
                 .frame(width: PKTokens.Layout.vsColW)
                 .frame(maxHeight: .infinity)
 
-                userColumn(user: PKMock.rival, crowned: !PKMock.leaderIsMe,
-                           wins: PKMock.rivalWins,
+                userColumn(user: rivalUser, crowned: !leaderIsMe,
+                           wins: rivalWins,
                            badgeBg: PKTokens.Color.rivalBadgeBg,
                            badgeFg: PKTokens.Color.rival)
                     .frame(maxWidth: .infinity)
@@ -408,6 +415,8 @@ struct BattleReportCard: View {
 // 单项对比行：左右双进度条
 struct MetricCompareRow: View {
     let metric: PKMock.Metric
+    var meName: String = PKMock.me.name
+    var rivalName: String = PKMock.rival.name
 
     var body: some View {
         let meWin = metric.meWin
@@ -419,14 +428,14 @@ struct MetricCompareRow: View {
                     .font(.app(size: PKTokens.Font.metricLabel))
                     .foregroundColor(PKTokens.Color.muted)
                 Spacer()
-                Text("\(meWin ? PKMock.me.name : PKMock.rival.name) 领先")
+                Text("\(meWin ? meName : rivalName) 领先")
                     .font(.app(size: PKTokens.Font.metricLead, weight: .medium))
                     .foregroundColor(meWin ? PKTokens.Color.me : PKTokens.Color.rival)
             }
             HStack(spacing: 10) {
                 // 我方
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("\(PKMock.me.name) \(metric.meText)")
+                    Text("\(meName) \(metric.meText)")
                         .font(.app(size: PKTokens.Font.metricValue))
                         .foregroundColor(meWin ? PKTokens.Color.me : PKTokens.Color.loseGray)
                     progressBar(pct: metric.me / maxV, win: meWin,
@@ -438,7 +447,7 @@ struct MetricCompareRow: View {
                 .frame(maxWidth: .infinity)
                 // 对方
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("\(PKMock.rival.name) \(metric.rivalText)")
+                    Text("\(rivalName) \(metric.rivalText)")
                         .font(.app(size: PKTokens.Font.metricValue))
                         .foregroundColor(!meWin ? PKTokens.Color.rival : PKTokens.Color.loseGray)
                     progressBar(pct: metric.rival / maxV, win: !meWin,
@@ -559,18 +568,20 @@ struct PKBarChart: View {
 }
 
 struct CalorieSection: View {
+    var me: PKUser = PKMock.me
+    var rival: PKUser = PKMock.rival
     @State private var mode = 0
     var body: some View {
         VStack(spacing: 0) {
             PKSectionTitle(systemIcon: "flame", title: "热量对比")
             HStack {
-                PKLegend()
+                PKLegend(meName: me.name, rivalName: rival.name)
                 Spacer()
                 CalSegmented(mode: $mode)
             }
             .padding(.bottom, 12)
-            PKBarChart(a: mode == 0 ? PKMock.me.intake : PKMock.me.burned,
-                       b: mode == 0 ? PKMock.rival.intake : PKMock.rival.burned)
+            PKBarChart(a: mode == 0 ? me.intake : me.burned,
+                       b: mode == 0 ? rival.intake : rival.burned)
             Text(mode == 0 ? "每日摄入热量 (kcal)" : "每日运动消耗 (kcal)")
                 .font(.app(size: PKTokens.Font.caption))
                 .foregroundColor(PKTokens.Color.subtle)
@@ -654,16 +665,18 @@ struct PKLineChart: View {
 }
 
 struct WeightSection: View {
+    var me: PKUser = PKMock.me
+    var rival: PKUser = PKMock.rival
     var body: some View {
-        let meLoss = PKMock.me.weights[0] - PKMock.me.weights[6]
-        let rivalLoss = PKMock.rival.weights[0] - PKMock.rival.weights[6]
+        let meLoss = me.weights[0] - me.weights[6]
+        let rivalLoss = rival.weights[0] - rival.weights[6]
         VStack(spacing: 0) {
             PKSectionTitle(systemIcon: "chart.line.downtrend.xyaxis", title: "体重变化")
-            PKLineChart(a: PKMock.me.weights, b: PKMock.rival.weights)
+            PKLineChart(a: me.weights, b: rival.weights)
             HStack {
-                Text("\(PKMock.me.name) 减 \(String(format: "%.1f", meLoss)) kg")
+                Text("\(me.name) 减 \(String(format: "%.1f", meLoss)) kg")
                 Spacer()
-                Text("\(PKMock.rival.name) 减 \(String(format: "%.1f", rivalLoss)) kg")
+                Text("\(rival.name) 减 \(String(format: "%.1f", rivalLoss)) kg")
             }
             .font(.app(size: PKTokens.Font.weightNote))
             .foregroundColor(PKTokens.Color.muted)
@@ -678,26 +691,28 @@ struct WeightSection: View {
 // MARK: =====================================================================
 
 struct ExerciseSection: View {
+    var me: PKUser = PKMock.me
+    var rival: PKUser = PKMock.rival
     var body: some View {
-        let exMe = PKMock.me.exerciseMin.reduce(0, +)
-        let exRival = PKMock.rival.exerciseMin.reduce(0, +)
+        let exMe = me.exerciseMin.reduce(0, +)
+        let exRival = rival.exerciseMin.reduce(0, +)
         let exMax = max(exMe, exRival)
 
         VStack(alignment: .leading, spacing: 0) {
             PKSectionTitle(systemIcon: "dumbbell", title: "运动时长对比")
-            PKLegend()
+            PKLegend(meName: me.name, rivalName: rival.name)
             VStack(spacing: 14) {
-                exerciseRow(name: PKMock.me.name, minutes: exMe, pct: exMe / exMax,
+                exerciseRow(name: me.name, minutes: exMe, pct: exMe / exMax,
                             valueColor: PKTokens.Color.primary,
                             fill: AnyShapeStyle(
                                 LinearGradient(colors: [PKTokens.Color.me, PKTokens.Color.rival],
                                                startPoint: .leading, endPoint: .trailing)))
-                exerciseRow(name: PKMock.rival.name, minutes: exRival, pct: exRival / exMax,
+                exerciseRow(name: rival.name, minutes: exRival, pct: exRival / exMax,
                             valueColor: PKTokens.Color.rival,
                             fill: AnyShapeStyle(PKTokens.Color.rival))
             }
             .padding(.top, 14)
-            Text("本周累计运动时长 · \(exMe >= exRival ? PKMock.me.name : PKMock.rival.name) 领先 \(Int(abs(exMe - exRival))) 分钟")
+            Text("本周累计运动时长 · \(exMe >= exRival ? me.name : rival.name) 领先 \(Int(abs(exMe - exRival))) 分钟")
                 .font(.app(size: PKTokens.Font.caption))
                 .foregroundColor(PKTokens.Color.subtle)
                 .frame(maxWidth: .infinity)
@@ -962,10 +977,11 @@ struct PKWaterTrend: View {
 }
 
 struct WaterSection: View {
-    var body: some View {
-        let me = PKMock.me, rival = PKMock.rival
-        let today = PKMock.today
+    var me: PKUser = PKMock.me
+    var rival: PKUser = PKMock.rival
+    var today: Int = PKMock.today
 
+    var body: some View {
         VStack(spacing: 0) {
             PKSectionTitle(systemIcon: "drop", title: "饮水达标对比")
 
@@ -989,7 +1005,7 @@ struct WaterSection: View {
                         .font(.app(size: PKTokens.Font.trendHead, weight: .medium))
                         .foregroundColor(PKTokens.Color.muted)
                     Spacer()
-                    PKLegend()
+                    PKLegend(meName: me.name, rivalName: rival.name)
                 }
                 .padding(.top, 12)
                 .padding(.bottom, 8)
@@ -1021,6 +1037,9 @@ struct PKPageView: View {
 
     @State private var isGuest: Bool = AuthService.shared.isGuest
 
+    /// 从 PKRepository 加载的本周对战数据（nil = 尚未加载 / 加载失败，回退 PKMock）
+    @State private var weeklyData: PKWeeklyData?
+
     var body: some View {
         VStack(spacing: 0) {
             CardTopBar(nickname: nickname, onProfileTap: onProfile)
@@ -1028,11 +1047,18 @@ struct PKPageView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: PKTokens.Layout.sectionGap) {
                     relationCard
-                    BattleReportCard()
-                    CalorieSection()
-                    WeightSection()
-                    ExerciseSection()
-                    WaterSection()
+                    BattleReportCard(
+                        meUser: meData,
+                        rivalUser: rivalData,
+                        leaderIsMe: leaderIsMe,
+                        meWins: meWins,
+                        rivalWins: rivalWins,
+                        metrics: weeklyMetrics
+                    )
+                    CalorieSection(me: meData, rival: rivalData)
+                    WeightSection(me: meData, rival: rivalData)
+                    ExerciseSection(me: meData, rival: rivalData)
+                    WaterSection(me: meData, rival: rivalData, today: todayIndex)
                 }
                 .padding(.horizontal, PKTokens.Layout.pageH)
                 .padding(.top, PKTokens.Layout.pageTop)
@@ -1042,6 +1068,81 @@ struct PKPageView: View {
         .background(PKTokens.Color.background.ignoresSafeArea())
         .onReceive(NotificationCenter.default.publisher(for: .authDidChange)) { _ in
             isGuest = AuthService.shared.isGuest
+        }
+        .task {
+            await loadWeeklyData()
+        }
+    }
+
+    // MARK: 桥接属性（weeklyData → PKMock 兼容类型）
+
+    /// 从仓库数据映射为我方 PKUser，数据缺失时回退 PKMock
+    private var meData: PKUser {
+        guard let w = weeklyData else { return PKMock.me }
+        let p = w.me
+        return PKUser(
+            name: p.nickname, avatar: "AvatarMe",
+            intake: p.dailyIntake.map(Double.init),
+            burned: p.dailyBurned.map(Double.init),
+            exerciseMin: p.exerciseMinutes.map(Double.init),
+            weights: p.weights,
+            waterGoal: Double(p.waterGoalML),
+            water: p.waterML.map(Double.init)
+        )
+    }
+
+    /// 从仓库数据映射为对手 PKUser
+    private var rivalData: PKUser {
+        guard let w = weeklyData else { return PKMock.rival }
+        let p = w.opponent
+        return PKUser(
+            name: p.nickname, avatar: "AvatarRival",
+            intake: p.dailyIntake.map(Double.init),
+            burned: p.dailyBurned.map(Double.init),
+            exerciseMin: p.exerciseMinutes.map(Double.init),
+            weights: p.weights,
+            waterGoal: Double(p.waterGoalML),
+            water: p.waterML.map(Double.init)
+        )
+    }
+
+    private var leaderIsMe: Bool {
+        weeklyData?.leaderIsMe ?? PKMock.leaderIsMe
+    }
+
+    private var meWins: Int {
+        weeklyData?.meWinsTotal ?? PKMock.meWins
+    }
+
+    private var rivalWins: Int {
+        weeklyData?.opponentWinsTotal ?? PKMock.rivalWins
+    }
+
+    private var weeklyMetrics: [PKMock.Metric] {
+        guard let w = weeklyData, !w.metrics.isEmpty else { return PKMock.metrics }
+        return w.metrics.map { m in
+            PKMock.Metric(
+                label: m.label,
+                me: m.myValue,
+                rival: m.opponentValue,
+                unit: "",
+                lowerBetter: true
+            )
+        }
+    }
+
+    /// 今日在一周中的索引（0=周一 ... 6=周日），仓库无数据时使用 PKMock.today
+    private var todayIndex: Int {
+        weeklyData != nil
+            ? Calendar.current.component(.weekday, from: Date()) - 1 // 0=Sun...6=Sat
+            : PKMock.today
+    }
+
+    private func loadWeeklyData() async {
+        do {
+            weeklyData = try await store.pkRepo.fetchWeeklyData()
+        } catch {
+            print("[PKPage] Weekly data fetch failed: \(error)")
         }
     }
 
