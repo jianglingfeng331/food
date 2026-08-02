@@ -85,3 +85,4 @@ save_mlmodel(fc, "FoodClassifierModel",
              color_layout=ct.colorlayout.RGB)])
 
 print(f"\n✅ 全部占位模型 → {OUT}")
+cd /Users/jianglingfeng/Documents/AI编辑/pknew/food-sticker-app/ios && bash build_ipa.sh

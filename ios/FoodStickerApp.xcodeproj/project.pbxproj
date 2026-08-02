@@ -27,6 +27,7 @@
 		B100000000000000000021 /* PKPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000021 /* PKPage.swift */; };
 		B100000000000000000012 /* CardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000012 /* CardViewController.swift */; };
 		B100000000000000000013 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000013 /* ProfileViewController.swift */; };
+		B410000000000000000003 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000003 /* ProfileView.swift */; };
 		B100000000000000000014 /* RecordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000014 /* RecordViewController.swift */; };
 		B100000000000000000015 /* StomachViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000015 /* StomachViewController.swift */; };
 		B100000000000000000016 /* HomeDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000016 /* HomeDesignTokens.swift */; };
@@ -41,6 +42,8 @@
 		B10000000000000000001E /* LucideIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000001E /* LucideIcons.swift */; };
 		B10000000000000000001F /* HomeModals.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000001F /* HomeModals.swift */; };
 		B100000000000000000022 /* AppFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000022 /* AppFont.swift */; };
+		B410000000000000000001 /* AvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000001 /* AvatarStore.swift */; };
+		B410000000000000000002 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000002 /* AvatarView.swift */; };
 		B100000000000000000023 /* CameraPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000023 /* CameraPage.swift */; };
 		B200000000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F200000000000000000001 /* Assets.xcassets */; };
 		B200000000000000000002 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F200000000000000000002 /* LaunchScreen.storyboard */; };
@@ -57,10 +60,31 @@
 		B20000000000000000000D /* NotoSansSC-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000E /* NotoSansSC-Variable.ttf */; };
 		B20000000000000000000E /* NotoSerifSC-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000F /* NotoSerifSC-Regular.ttf */; };
 		B20000000000000000000F /* NotoSerifSC-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F200000000000000000010 /* NotoSerifSC-Bold.ttf */; };
-		B400000000000000000001 /* RealTimeSegmentationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000001 /* RealTimeSegmentationEngine.swift */; };
-		B400000000000000000002 /* StickerRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000002 /* StickerRenderer.swift */; };
-		B400000000000000000003 /* StickerAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000003 /* StickerAIService.swift */; };
-		B400000000000000000004 /* StickerFlowViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000004 /* StickerFlowViewController.swift */; };
+			X1A0000000000000000A0 /* FoodNutritionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A0 /* FoodNutritionModel.swift */; };
+			X1A0000000000000000A1 /* VisionSegmentationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A1 /* VisionSegmentationHelper.swift */; };
+			X1A0000000000000000A2 /* FoodNutritionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A2 /* FoodNutritionService.swift */; };
+			X1A0000000000000000A3 /* EmojiStickerGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A3 /* EmojiStickerGenerator.swift */; };
+			X1A0000000000000000A4 /* FoodStickerCaptureProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A4 /* FoodStickerCaptureProcessor.swift */; };
+			X1A0000000000000000A5 /* FoodStickerResultViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A5 /* FoodStickerResultViewController.swift */; };
+			X1A0000000000000000A6 /* StickerResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A6 /* StickerResultView.swift */; };
+		B400000000000000000001 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000001 /* AuthModels.swift */; };
+		B400000000000000000002 /* MockAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000002 /* MockAuthProvider.swift */; };
+		B400000000000000000003 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000003 /* AuthService.swift */; };
+		B400000000000000000004 /* AuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000004 /* AuthCoordinator.swift */; };
+		B400000000000000000005 /* AuthGateViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000005 /* AuthGateViewController.swift */; };
+		B400000000000000000006 /* RegisterViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000006 /* RegisterViewController.swift */; };
+		B400000000000000000007 /* QRCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000007 /* QRCoder.swift */; };
+		B400000000000000000008 /* QRScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000008 /* QRScannerViewController.swift */; };
+		B400000000000000000009 /* MyQRCodeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000009 /* MyQRCodeViewController.swift */; };
+		B410000000000000000010 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000010 /* ProfileStore.swift */; };
+		B410000000000000000011 /* GoalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000011 /* GoalView.swift */; };
+		B410000000000000000012 /* WeightTrendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000012 /* WeightTrendView.swift */; };
+		B410000000000000000013 /* AchievementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000013 /* AchievementView.swift */; };
+		B410000000000000000014 /* WorkoutPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000014 /* WorkoutPlanView.swift */; };
+		B410000000000000000015 /* ReminderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000015 /* ReminderView.swift */; };
+		B410000000000000000016 /* AccountSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000016 /* AccountSettingsView.swift */; };
+		B40000000000000000000A /* PKRelationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000A /* PKRelationService.swift */; };
+		B40000000000000000000B /* PKBindingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000B /* PKBindingCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +108,7 @@
 		F100000000000000000021 /* PKPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKPage.swift; sourceTree = "<group>"; };
 		F100000000000000000012 /* CardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardViewController.swift; sourceTree = "<group>"; };
 		F100000000000000000013 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
+		F410000000000000000003 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		F100000000000000000014 /* RecordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordViewController.swift; sourceTree = "<group>"; };
 		F100000000000000000015 /* StomachViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StomachViewController.swift; sourceTree = "<group>"; };
 		F100000000000000000016 /* HomeDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeDesignTokens.swift; sourceTree = "<group>"; };
@@ -98,6 +123,8 @@
 		F10000000000000000001E /* LucideIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LucideIcons.swift; sourceTree = "<group>"; };
 		F10000000000000000001F /* HomeModals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeModals.swift; sourceTree = "<group>"; };
 		F100000000000000000022 /* AppFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFont.swift; sourceTree = "<group>"; };
+		F410000000000000000001 /* AvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStore.swift; sourceTree = "<group>"; };
+		F410000000000000000002 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		F100000000000000000023 /* CameraPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPage.swift; sourceTree = "<group>"; };
 		F200000000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F200000000000000000002 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -116,10 +143,31 @@
 		F20000000000000000000F /* NotoSerifSC-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = NotoSerifSC-Regular.ttf; sourceTree = "<group>"; };
 		F200000000000000000010 /* NotoSerifSC-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = NotoSerifSC-Bold.ttf; sourceTree = "<group>"; };
 		F300000000000000000001 /* FoodStickerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FoodStickerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F400000000000000000001 /* RealTimeSegmentationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealTimeSegmentationEngine.swift; sourceTree = "<group>"; };
-		F400000000000000000002 /* StickerRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerRenderer.swift; sourceTree = "<group>"; };
-		F400000000000000000003 /* StickerAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerAIService.swift; sourceTree = "<group>"; };
-		F400000000000000000004 /* StickerFlowViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerFlowViewController.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A0 /* FoodNutritionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodNutritionModel.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A1 /* VisionSegmentationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionSegmentationHelper.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A2 /* FoodNutritionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodNutritionService.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A3 /* EmojiStickerGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiStickerGenerator.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A4 /* FoodStickerCaptureProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodStickerCaptureProcessor.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A5 /* FoodStickerResultViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodStickerResultViewController.swift; sourceTree = "<group>"; };
+			X2A0000000000000000A6 /* StickerResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerResultView.swift; sourceTree = "<group>"; };
+		F400000000000000000001 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
+		F400000000000000000002 /* MockAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAuthProvider.swift; sourceTree = "<group>"; };
+		F400000000000000000003 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		F400000000000000000004 /* AuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCoordinator.swift; sourceTree = "<group>"; };
+		F400000000000000000005 /* AuthGateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthGateViewController.swift; sourceTree = "<group>"; };
+		F400000000000000000006 /* RegisterViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterViewController.swift; sourceTree = "<group>"; };
+		F400000000000000000007 /* QRCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCoder.swift; sourceTree = "<group>"; };
+		F400000000000000000008 /* QRScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerViewController.swift; sourceTree = "<group>"; };
+		F400000000000000000009 /* MyQRCodeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyQRCodeViewController.swift; sourceTree = "<group>"; };
+		F410000000000000000010 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
+		F410000000000000000011 /* GoalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalView.swift; sourceTree = "<group>"; };
+		F410000000000000000012 /* WeightTrendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeightTrendView.swift; sourceTree = "<group>"; };
+		F410000000000000000013 /* AchievementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementView.swift; sourceTree = "<group>"; };
+		F410000000000000000014 /* WorkoutPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutPlanView.swift; sourceTree = "<group>"; };
+		F410000000000000000015 /* ReminderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderView.swift; sourceTree = "<group>"; };
+		F410000000000000000016 /* AccountSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSettingsView.swift; sourceTree = "<group>"; };
+		F40000000000000000000A /* PKRelationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKRelationService.swift; sourceTree = "<group>"; };
+		F40000000000000000000B /* PKBindingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKBindingCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,7 +194,6 @@
 			children = (
 				G110000000000000000001 /* App */,
 				G110000000000000000002 /* Camera */,
-				G400000000000000000001 /* Segmentation */,
 				G110000000000000000003 /* ML */,
 				G110000000000000000004 /* Cloud */,
 				G110000000000000000005 /* Nutrition */,
@@ -154,11 +201,13 @@
 				G110000000000000000007 /* Sticker */,
 				G110000000000000000008 /* Results */,
 				G110000000000000000009 /* Resources */,
-				G11000000000000000000A /* Data */,
-				G11000000000000000000B /* Tabs */,
-				G110000000000000000013 /* Shared */,
-							G110000000000000000014 /* Fonts */,
-			);
+			G11000000000000000000A /* Data */,
+			G11000000000000000000B /* Tabs */,
+			G110000000000000000013 /* Shared */,
+						G110000000000000000014 /* Fonts */,
+			G400000000000000000001 /* Auth */,
+			G400000000000000000002 /* QR */,
+		);
 			path = FoodSticker;
 			sourceTree = "<group>";
 		};
@@ -179,19 +228,10 @@
 			isa = PBXGroup;
 			children = (
 				F100000000000000000004 /* CameraViewController.swift */,
-				F400000000000000000004 /* StickerFlowViewController.swift */,
 			);
 			path = Camera;
 			sourceTree = "<group>";
 		};
-			G400000000000000000001 /* Segmentation */ = {
-		isa = PBXGroup;
-		children = (
-			F400000000000000000001 /* RealTimeSegmentationEngine.swift */,
-		);
-		path = Segmentation;
-		sourceTree = "<group>";
-	};
 G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
@@ -199,6 +239,7 @@ G110000000000000000003 /* ML */ = {
 				F100000000000000000006 /* FoodClassifier.swift */,
 				F100000000000000000007 /* ImageTensorUtils.swift */,
 				F100000000000000000008 /* MattingEngine.swift */,
+				X2A0000000000000000A1 /* VisionSegmentationHelper.swift */,
 			);
 			path = ML;
 			sourceTree = "<group>";
@@ -206,9 +247,10 @@ G110000000000000000003 /* ML */ = {
 		G110000000000000000004 /* Cloud */ = {
 			isa = PBXGroup;
 			children = (
-				F100000000000000000009 /* CloudAPI.swift */,
-				F400000000000000000003 /* StickerAIService.swift */,
-			);
+			F100000000000000000009 /* CloudAPI.swift */,
+			X2A0000000000000000A2 /* FoodNutritionService.swift */,
+			X2A0000000000000000A3 /* EmojiStickerGenerator.swift */,
+		);
 			path = Cloud;
 			sourceTree = "<group>";
 		};
@@ -216,6 +258,7 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000A /* NutritionDB.swift */,
+				X2A0000000000000000A0 /* FoodNutritionModel.swift */,
 			);
 			path = Nutrition;
 			sourceTree = "<group>";
@@ -224,6 +267,7 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000B /* StickerPipeline.swift */,
+				X2A0000000000000000A4 /* FoodStickerCaptureProcessor.swift */,
 			);
 			path = Pipeline;
 			sourceTree = "<group>";
@@ -232,7 +276,6 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000C /* StickerComposer.swift */,
-				F400000000000000000002 /* StickerRenderer.swift */,
 			);
 			path = Sticker;
 			sourceTree = "<group>";
@@ -241,6 +284,8 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000D /* ResultsViewController.swift */,
+				X2A0000000000000000A5 /* FoodStickerResultViewController.swift */,
+				X2A0000000000000000A6 /* StickerResultView.swift */,
 			);
 			path = Results;
 			sourceTree = "<group>";
@@ -282,6 +327,29 @@ G110000000000000000003 /* ML */ = {
 			path = Tabs;
 			sourceTree = "<group>";
 		};
+		G400000000000000000001 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				F400000000000000000001 /* AuthModels.swift */,
+				F400000000000000000002 /* MockAuthProvider.swift */,
+				F400000000000000000003 /* AuthService.swift */,
+				F400000000000000000004 /* AuthCoordinator.swift */,
+				F400000000000000000005 /* AuthGateViewController.swift */,
+				F400000000000000000006 /* RegisterViewController.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		G400000000000000000002 /* QR */ = {
+			isa = PBXGroup;
+			children = (
+				F400000000000000000007 /* QRCoder.swift */,
+				F400000000000000000008 /* QRScannerViewController.swift */,
+				F400000000000000000009 /* MyQRCodeViewController.swift */,
+			);
+			path = QR;
+			sourceTree = "<group>";
+		};
 		G11000000000000000000C /* Home */ = {
 			isa = PBXGroup;
 			children = (
@@ -312,6 +380,8 @@ G110000000000000000003 /* ML */ = {
 			children = (
 				F100000000000000000011 /* PKViewController.swift */,
 				F100000000000000000021 /* PKPage.swift */,
+				F40000000000000000000A /* PKRelationService.swift */,
+				F40000000000000000000B /* PKBindingCoordinator.swift */,
 			);
 			path = PK;
 			sourceTree = "<group>";
@@ -329,6 +399,14 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F100000000000000000013 /* ProfileViewController.swift */,
+				F410000000000000000003 /* ProfileView.swift */,
+				F410000000000000000010 /* ProfileStore.swift */,
+				F410000000000000000011 /* GoalView.swift */,
+				F410000000000000000012 /* WeightTrendView.swift */,
+				F410000000000000000013 /* AchievementView.swift */,
+				F410000000000000000014 /* WorkoutPlanView.swift */,
+				F410000000000000000015 /* ReminderView.swift */,
+				F410000000000000000016 /* AccountSettingsView.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -353,6 +431,8 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000001E /* LucideIcons.swift */,
+				F410000000000000000001 /* AvatarStore.swift */,
+				F410000000000000000002 /* AvatarView.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -462,7 +542,32 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B100000000000000000001 /* AppDelegate.swift in Sources */,
+				X1A0000000000000000A0 /* FoodNutritionModel.swift in Sources */,
+				X1A0000000000000000A1 /* VisionSegmentationHelper.swift in Sources */,
+				X1A0000000000000000A2 /* FoodNutritionService.swift in Sources */,
+				X1A0000000000000000A3 /* EmojiStickerGenerator.swift in Sources */,
+				X1A0000000000000000A4 /* FoodStickerCaptureProcessor.swift in Sources */,
+				X1A0000000000000000A5 /* FoodStickerResultViewController.swift in Sources */,
+			X1A0000000000000000A6 /* StickerResultView.swift in Sources */,
+			B400000000000000000001 /* AuthModels.swift in Sources */,
+			B400000000000000000002 /* MockAuthProvider.swift in Sources */,
+			B400000000000000000003 /* AuthService.swift in Sources */,
+			B400000000000000000004 /* AuthCoordinator.swift in Sources */,
+			B400000000000000000005 /* AuthGateViewController.swift in Sources */,
+			B400000000000000000006 /* RegisterViewController.swift in Sources */,
+			B400000000000000000007 /* QRCoder.swift in Sources */,
+			B400000000000000000008 /* QRScannerViewController.swift in Sources */,
+			B400000000000000000009 /* MyQRCodeViewController.swift in Sources */,
+			B40000000000000000000A /* PKRelationService.swift in Sources */,
+			B40000000000000000000B /* PKBindingCoordinator.swift in Sources */,
+			B410000000000000000010 /* ProfileStore.swift in Sources */,
+			B410000000000000000011 /* GoalView.swift in Sources */,
+			B410000000000000000012 /* WeightTrendView.swift in Sources */,
+			B410000000000000000013 /* AchievementView.swift in Sources */,
+			B410000000000000000014 /* WorkoutPlanView.swift in Sources */,
+			B410000000000000000015 /* ReminderView.swift in Sources */,
+			B410000000000000000016 /* AccountSettingsView.swift in Sources */,
+			B100000000000000000001 /* AppDelegate.swift in Sources */,
 				B100000000000000000002 /* SceneDelegate.swift in Sources */,
 				B100000000000000000003 /* Router.swift in Sources */,
 				B100000000000000000004 /* CameraViewController.swift in Sources */,
@@ -482,6 +587,7 @@ G110000000000000000003 /* ML */ = {
 				B100000000000000000021 /* PKPage.swift in Sources */,
 				B100000000000000000012 /* CardViewController.swift in Sources */,
 				B100000000000000000013 /* ProfileViewController.swift in Sources */,
+				B410000000000000000003 /* ProfileView.swift in Sources */,
 				B100000000000000000014 /* RecordViewController.swift in Sources */,
 				B100000000000000000015 /* StomachViewController.swift in Sources */,
 				B100000000000000000016 /* HomeDesignTokens.swift in Sources */,
@@ -496,11 +602,9 @@ G110000000000000000003 /* ML */ = {
 				B10000000000000000001E /* LucideIcons.swift in Sources */,
 				B10000000000000000001F /* HomeModals.swift in Sources */,
 				B100000000000000000022 /* AppFont.swift in Sources */,
+				B410000000000000000001 /* AvatarStore.swift in Sources */,
+				B410000000000000000002 /* AvatarView.swift in Sources */,
 				B100000000000000000023 /* CameraPage.swift in Sources */,
-				B400000000000000000001 /* RealTimeSegmentationEngine.swift in Sources */,
-				B400000000000000000002 /* StickerRenderer.swift in Sources */,
-				B400000000000000000003 /* StickerAIService.swift in Sources */,
-				B400000000000000000004 /* StickerFlowViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

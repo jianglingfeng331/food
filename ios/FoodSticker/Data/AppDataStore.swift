@@ -74,7 +74,7 @@ struct UserProfile {
 
 // MARK: - 全局数据存储（单例）
 
-final class AppDataStore {
+final class AppDataStore: ObservableObject {
     static let shared = AppDataStore()
 
     // 用户信息
@@ -105,15 +105,24 @@ final class AppDataStore {
         return (0, 0)
     }
 
-    // 今日记录
-    @Published var todayRecords: [DailyRecord] = [
-        DailyRecord(type: .food, name: "鸡胸肉沙拉", calories: 320, amount: 200),
-        DailyRecord(type: .food, name: "全麦面包", calories: 180, amount: 100),
-        DailyRecord(type: .exercise, name: "跑步", calories: 300, amount: 30),
-        DailyRecord(type: .water, name: "白开水", calories: 0, amount: 500),
-        DailyRecord(type: .water, name: "矿泉水", calories: 0, amount: 300),
-        DailyRecord(type: .weight, name: "今日体重", calories: 0, amount: 72.5),
-    ]
+    // 今日记录（首次启动用 mock，之后以本地持久化为准，避免云端不可达时数据丢失）
+    @Published var todayRecords: [DailyRecord] = {
+        if let data = UserDefaults.standard.data(forKey: "fs_todayRecords"),
+           let list = try? JSONDecoder().decode([DailyRecord].self, from: data) {
+            return list
+        }
+        return [
+            DailyRecord(type: .food, name: "鸡胸肉沙拉", calories: 320, amount: 200),
+            DailyRecord(type: .food, name: "全麦面包", calories: 180, amount: 100),
+            DailyRecord(type: .exercise, name: "跑步", calories: 300, amount: 30),
+            DailyRecord(type: .water, name: "白开水", calories: 0, amount: 500),
+            DailyRecord(type: .water, name: "矿泉水", calories: 0, amount: 300),
+            DailyRecord(type: .weight, name: "今日体重", calories: 0, amount: 72.5),
+        ]
+    }()
+
+    // 我的贴纸（拍摄生成的预设）
+    @Published var savedStickers: [FoodSticker] = []
 
     // 本周概览
     var todayCaloriesConsumed: Int { todayRecords.filter { $0.type == .food }.reduce(0) { $0 + $1.calories } }
@@ -123,8 +132,16 @@ final class AppDataStore {
 
     private init() {}
 
+    /// 将今日记录持久化到本地，保证云端不可达时（如 -1004）数据不丢失、重启后仍在
+    private func persistRecords() {
+        if let data = try? JSONEncoder().encode(todayRecords) {
+            UserDefaults.standard.set(data, forKey: "fs_todayRecords")
+        }
+    }
+
     func addRecord(_ record: DailyRecord) {
         todayRecords.append(record)
+        persistRecords()
         Task {
             try? await CloudAPI.shared.addRecord(
                 type: record.type.rawValue, name: record.name,
@@ -135,33 +152,62 @@ final class AppDataStore {
 
     func removeRecord(_ id: String) {
         todayRecords.removeAll { $0.id == id }
+        persistRecords()
         Task { try? await CloudAPI.shared.deleteRecord(id: id) }
     }
 
+    /// 加入“我的贴纸/预设”列表：同名食物去重（替换旧记录），始终插到最前
+    func addSavedSticker(_ s: FoodSticker) {
+        savedStickers.removeAll { $0.name == s.name }
+        savedStickers.insert(s, at: 0)
+    }
+
+    func removeSavedSticker(_ id: UUID) {
+        savedStickers.removeAll { $0.id == id }
+    }
+
     // MARK: - 云端同步（替代硬编码 mock）
-    /// App 启动时调用：登录演示账号并拉取首页/PK 数据
+    /// App 启动时调用。
+    /// 游客模式：不强制登录，直接以本地 mock 数据浏览；
+    /// 已登录（AuthService 有用户）：尝试用 CloudAPI 同步真实数据（失败则保留本地）。
     @MainActor
     func bootstrap() async {
+        guard AuthService.shared.isLoggedIn else {
+            // 游客：仅确保本地记录已就绪（无需云端）
+            return
+        }
+        // 已登录：尝试演示账号同步（AuthService 切换为云登录后可替换为真实 token）
         if !CloudAPI.shared.isLoggedIn {
             _ = try? await CloudAPI.shared.login(userID: "user-1", password: "123456")
         }
         try? await sync()
     }
 
-    /// 从后端刷新首页仪表盘与 PK 对比数据
+    /// 从后端刷新首页仪表盘与 PK 对比数据。
+    /// 注意：todayRecords 采用「本地优先 + 云端合并」，绝不整体覆盖本地，
+    /// 以免云端不可达（-1004）或云端为空时把用户本地已保存的记录清掉。
     @MainActor
     func sync() async throws {
         let dash = try await CloudAPI.shared.dashboard()
         applyProfile(dash.user)
-        todayRecords = dash.todayRecords.map {
+        let cloudRecords: [DailyRecord] = dash.todayRecords.map {
             DailyRecord(id: $0.id, type: RecordType(rawValue: $0.type) ?? .food,
                         name: $0.name, calories: Int($0.calories),
                         amount: $0.amount, unit: $0.unit, time: $0.time)
         }
+        mergeRecords(cloud: cloudRecords)
         if let wk = try? await CloudAPI.shared.pkWeek() {
             if let pu = wk.partner?.user { applyPartner(pu) }
             pkWeeks = [mapPK(wk)]
         }
+        persistRecords()
+    }
+
+    /// 合并云端与本地记录：本地已有（按 id）的保留，云端新增的补充进来
+    private func mergeRecords(cloud: [DailyRecord]) {
+        let localIDs = Set(todayRecords.map { $0.id })
+        let additions = cloud.filter { !localIDs.contains($0.id) }
+        todayRecords.append(contentsOf: additions)
     }
 
     private func applyProfile(_ u: CloudAPI.CkUser) {

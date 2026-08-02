@@ -1,5 +1,6 @@
 import UIKit
 import SwiftUI
+import Combine
 
 // MARK: - 消化精灵（肚子小人动画）
 
@@ -11,11 +12,16 @@ final class StomachViewController: UIViewController {
     private let progressBar = UIProgressView(progressViewStyle: .default)
     private let detailLabel = UILabel()
     private var animTimer: Timer?
+    private var cancellable: AnyCancellable?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor(white: 0.96, alpha: 1.0)
         setupUI()
+        // 订阅今日记录变化：保存/删除后即使不切 Tab 也能即时刷新（Tab 切换不触发 viewWillAppear）
+        cancellable = store.$todayRecords.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.refresh() }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {

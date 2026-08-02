@@ -1,5 +1,6 @@
 import UIKit
 import SwiftUI
+import Combine
 
 // MARK: - 健康记录管理页（饮食/运动/饮水/体重 CRUD）
 
@@ -7,6 +8,7 @@ final class RecordViewController: UIViewController {
 
     private let store = AppDataStore.shared
     private var selectedType: RecordType
+    private var cancellable: AnyCancellable?
 
     init(initialType: RecordType = .food) {
         self.selectedType = initialType
@@ -27,6 +29,10 @@ final class RecordViewController: UIViewController {
         setupTableView()
         setupAddButton()
         setupEmptyLabel()
+        // 订阅今日记录变化：保存/删除后即使不切 Tab 也能即时刷新（Tab 切换不触发 viewWillAppear）
+        cancellable = store.$todayRecords.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.reloadData() }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {

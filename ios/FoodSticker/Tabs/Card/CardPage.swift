@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // 全局扩展：支持 SwiftUI.Color(hex: 0xRRGGBB)，供 CardTokens 中所有颜色常量使用
 extension SwiftUI.Color {
@@ -6,6 +7,32 @@ extension SwiftUI.Color {
         self.init(red: Double((hex >> 16) & 0xFF) / 255.0,
                   green: Double((hex >> 8) & 0xFF) / 255.0,
                   blue: Double(hex & 0xFF) / 255.0)
+    }
+}
+
+/// 贴纸图片统一渲染：优先使用用户保存的真实 uiImage，其次按 imageName 加载资源，
+/// 都没有时回退为首字占位（避免破图）。
+struct StickerImageView: View {
+    let sticker: FoodSticker
+    var contentMode: ContentMode = .fill
+
+    var body: some View {
+        if let ui = sticker.uiImage {
+            Image(uiImage: ui)
+                .resizable()
+                .aspectRatio(contentMode: contentMode)
+        } else if !sticker.imageName.isEmpty, let _ = UIImage(named: sticker.imageName) {
+            Image(sticker.imageName)
+                .resizable()
+                .aspectRatio(contentMode: contentMode)
+        } else {
+            ZStack {
+                Color.white
+                Text(String(sticker.name.prefix(1)))
+                    .font(.app(size: 40, weight: .bold))
+                    .foregroundColor(CardTokens.Color.primary)
+            }
+        }
     }
 }
 
@@ -149,6 +176,8 @@ typealias FontSize = CardTokens.FontSize
 struct FoodSticker: Identifiable, Equatable {
     let id = UUID()
     let imageName: String
+    /// 用户拍照/生成的真实贴纸图（优先于 imageName 渲染），用于保存/预设后回显
+    let uiImage: UIKit.UIImage?
     let name: String
     let cal: Int
     let date: String
@@ -160,6 +189,35 @@ struct FoodSticker: Identifiable, Equatable {
     let sugar: Int
     let salt: Double
     let tip: String
+
+    // 显式 init：确保 uiImage 参数始终被编译器识别（避免合成构造器缓存问题）
+    init(imageName: String,
+         uiImage: UIKit.UIImage? = nil,
+         name: String,
+         cal: Int,
+         date: String = "",
+         time: String = "",
+         protein: Int = 0,
+         carbs: Int = 0,
+         fat: Int = 0,
+         fiber: Int = 0,
+         sugar: Int = 0,
+         salt: Double = 0,
+         tip: String = "") {
+        self.imageName = imageName
+        self.uiImage = uiImage
+        self.name = name
+        self.cal = cal
+        self.date = date
+        self.time = time
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.fiber = fiber
+        self.sugar = sugar
+        self.salt = salt
+        self.tip = tip
+    }
 }
 
 struct BoardSticker: Identifiable {
@@ -267,34 +325,29 @@ enum CardMock {
 
 struct CardTopBar: View {
     let nickname: String
-    // 对齐 Web getGreeting(hour)
-    private var greeting: String {
-        let h = Calendar.current.component(.hour, from: Date())
-        if h >= 5 && h < 11 { return "早上好" }
-        if h >= 11 && h < 14 { return "中午好" }
-        if h >= 14 && h < 18 { return "下午好" }
-        return "晚上好"
-    }
+    /// 点击右侧「我的」头像入口（与首页顶部保持一致）
+    var onProfileTap: (() -> Void)? = nil
+
     var body: some View {
-        // 对齐 Web TopBar：问候语(20 bold) · 昵称(14 muted) chevron(12)，右侧无图标
-        HStack(spacing: 6) {
-            Text(greeting)
-                .font(.app(size: 20, weight: .bold))
-                .foregroundColor(CardTokens.Color.foreground)
-            Text("·")
-                .font(.app(size: 12))
-                .foregroundColor(CardTokens.Color.foregroundSubtle)
-            Text(nickname)
-                .font(.app(size: 14))
-                .foregroundColor(CardTokens.Color.foregroundMuted)
-            Image(systemName: "chevron.down")
-                .font(.app(size: 12, weight: .medium))
-                .foregroundColor(CardTokens.Color.foregroundMuted)
+        // 与首页 TopBarView 统一：问候语 + 昵称(标题) / 副标题，右侧「我的」头像按钮
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("嗨，\(nickname)")
+                    .font(.app(size: 22, weight: .bold))
+                    .foregroundColor(CardTokens.Color.foreground)
+                Text("今天也要好好吃饭呀")
+                    .font(.app(size: 13))
+                    .foregroundColor(CardTokens.Color.foregroundMuted)
+            }
             Spacer()
+            Button(action: { onProfileTap?() }) {
+                AvatarView(AvatarStore.shared.avatarImage, size: 40)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, CardTokens.Spacing.h)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 }
 
@@ -511,10 +564,6 @@ struct StickerChipView: View {
     @State private var start = CGSize.zero
     @State private var dragging = false
 
-    private var hasImage: Bool {
-        UIImage(named: sticker.imageName) != nil
-    }
-
     var body: some View {
         let size = CardTokens.Board.stickerSize   // 100
         let r = CardTokens.Radius.sticker         // 24
@@ -527,24 +576,12 @@ struct StickerChipView: View {
                 .offset(y: 8)
 
             // 图片层（对齐 Web：object-cover 填满 + 白边4 + 圆角24 + 阴影 0_4px_16px）
-            ZStack {
-                if hasImage {
-                    Image(sticker.imageName)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: size, height: size)
-                } else {
-                    Color.white
-                    Text(String(sticker.name.prefix(1)))
-                        .font(.app(size: size * 0.4, weight: .bold))
-                        .foregroundColor(CardTokens.Color.primary)
-                }
-            }
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: r))
-            .overlay(RoundedRectangle(cornerRadius: r)
-                .stroke(Color.white, lineWidth: CardTokens.Board.stickerBorder))
-            .shadow(color: .black.opacity(0.08), radius: 16, y: 4)
+            StickerImageView(sticker: sticker, contentMode: .fill)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: r))
+                .overlay(RoundedRectangle(cornerRadius: r)
+                    .stroke(Color.white, lineWidth: CardTokens.Board.stickerBorder))
+                .shadow(color: .black.opacity(0.08), radius: 16, y: 4)
         }
         .frame(width: size, height: size)
         // 标签：悬挂在图片下方（对齐 Web -bottom-36px 的纵向双行标签）
@@ -1099,14 +1136,26 @@ struct FoodRecordList: View {
             VStack(spacing: 10) {
                 ForEach(records) { r in
                     HStack(spacing: 12) {
-                        Image(r.imageName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: CardTokens.Board.tileSize, height: CardTokens.Board.tileSize)
-                            .background(
+                        // 真实保存的食物可能无预置贴纸图（imageName 为空），回退为首字占位
+                        if !r.imageName.isEmpty {
+                            Image(r.imageName)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: CardTokens.Board.tileSize, height: CardTokens.Board.tileSize)
+                                .background(
+                                    RoundedRectangle(cornerRadius: CardTokens.Radius.tile)
+                                        .fill(CardTokens.Color.primaryBg10)
+                                )
+                        } else {
+                            ZStack {
                                 RoundedRectangle(cornerRadius: CardTokens.Radius.tile)
                                     .fill(CardTokens.Color.primaryBg10)
-                            )
+                                Text(String(r.name.prefix(1)))
+                                    .font(.app(size: 18, weight: .bold))
+                                    .foregroundColor(CardTokens.Color.primary)
+                            }
+                            .frame(width: CardTokens.Board.tileSize, height: CardTokens.Board.tileSize)
+                        }
                         VStack(alignment: .leading, spacing: 3) {
                             Text(r.name)
                                 .font(.app(size: FontSize.base, weight: .semibold))
@@ -1204,6 +1253,7 @@ struct StickerDetailView: View {
                 bottomBar
             }
             .background(CardTokens.Color.background)
+            .ignoresSafeArea(.container, edges: .bottom)
 
             if showDelete { deleteAlert }
             if showShare { sharePanel }
@@ -1224,17 +1274,36 @@ struct StickerDetailView: View {
                     let dist = abs(CGFloat(i) - cpos)
                     let opacity = max(0.5, 1 - dist * 0.7)         // Web: max(0.5, 1 - dist*0.7)
                     let scale = 1 - min(0.1, dist * 0.08)          // Web: 1 - min(0.1, dist*0.08)
-                    Image(s.imageName)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: slideW * 0.8, height: imgH)  // Web w-[80%]
+                    // 真实保存的食物可能无预置贴纸图（imageName 为空），回退为首字占位
+                    if !s.imageName.isEmpty {
+                        Image(s.imageName)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: slideW * 0.8, height: imgH)  // Web w-[80%]
+                            .clipShape(RoundedRectangle(cornerRadius: 28))
+                            .overlay(RoundedRectangle(cornerRadius: 28)
+                                .stroke(Color.white, lineWidth: 5))
+                            .shadow(color: CardTokens.Color.primary.opacity(0.22), radius: 11, y: 10)
+                            .opacity(opacity)
+                            .scaleEffect(scale)
+                            .frame(width: slideW)
+                    } else {
+                        ZStack {
+                            Color.white
+                                .clipShape(RoundedRectangle(cornerRadius: 28))
+                                .overlay(RoundedRectangle(cornerRadius: 28)
+                                    .stroke(CardTokens.Color.primary.opacity(0.15), lineWidth: 1))
+                            Text(String(s.name.prefix(1)))
+                                .font(.app(size: 32, weight: .bold))
+                                .foregroundColor(CardTokens.Color.primary)
+                        }
+                        .frame(width: slideW * 0.8, height: imgH)
                         .clipShape(RoundedRectangle(cornerRadius: 28))
-                        .overlay(RoundedRectangle(cornerRadius: 28)
-                            .stroke(Color.white, lineWidth: 5))
-                        .shadow(color: CardTokens.Color.primary.opacity(0.22), radius: 11, y: 10)
+                        .shadow(color: CardTokens.Color.primary.opacity(0.15), radius: 6, y: 4)
                         .opacity(opacity)
                         .scaleEffect(scale)
                         .frame(width: slideW)
+                    }
                 }
             }
             .frame(height: geo.size.height)
@@ -1390,7 +1459,7 @@ struct StickerDetailView: View {
         }
     }
 
-    // MARK: 底部操作栏（关闭 / 删除 / 分享）
+    // MARK: 底部操作栏（关闭 / 删除 / 分享）—— 对齐 Web 端样式
     private var bottomBar: some View {
         HStack(spacing: 0) {
             Spacer()
@@ -1399,35 +1468,42 @@ struct StickerDetailView: View {
                     .font(.app(size: 24, weight: .medium))
                     .foregroundColor(CardTokens.Color.primary)
                     .frame(width: 48, height: 48)
-                    .contentShape(Circle())
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(ScaleButtonStyle())
             Spacer()
             Button { showDelete = true } label: {
                 Image(systemName: "trash")
                     .font(.app(size: 24))
-                    .foregroundColor(CardTokens.Color.error)
+                    .foregroundColor(CardTokens.Color.primary)
                     .frame(width: 48, height: 48)
-                    .contentShape(Circle())
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(ScaleButtonStyle())
             Spacer()
             Button { showShare = true } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.app(size: 24))
                     .foregroundColor(CardTokens.Color.primary)
                     .frame(width: 48, height: 48)
-                    .contentShape(Circle())
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(ScaleButtonStyle())
             Spacer()
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 32)
+        .padding(.top, 2)
+        .padding(.bottom, max(bottomSafeInset, 4))
         .background(CardTokens.Color.background)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(CardTokens.Color.surfaceBorder)
-                .frame(height: 0.5)
-        }
+    }
+
+    /// UIKit 安全区域底部高度（兼容 iOS 14）
+    private var bottomSafeInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
     }
 
     // MARK: 删除确认弹窗（Web bg-black/40 + 圆角 20 白卡）
@@ -1545,21 +1621,72 @@ struct StickerDetailView: View {
     }
 }
 
+// MARK: - 通用按压缩放按钮样式（对齐 Web active:scale-90 反馈）
+private struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 // MARK: =====================================================================
 // MARK: - 主页面
 // MARK: =====================================================================
 
 struct CardPageView: View {
+    @StateObject private var store = AppDataStore.shared
     @State private var mode: DiaryMode = .me
     @State private var selectedDay = Date()
     @State private var selected: FoodSticker?
-
+    /// 点击顶部「我的」头像入口
+    var onProfile: (() -> Void)? = nil
     private var nickname: String { mode == .me ? "小鹿" : "阿泽" }
+
+    // 今日真实保存的食物（来自 AppDataStore.todayRecords，动态加载）
+    private var todayFoodStickers: [FoodSticker] {
+        store.todayRecords
+            .filter { $0.type == .food }
+            .map {
+                FoodSticker(imageName: "", uiImage: nil, name: $0.name, cal: $0.calories,
+                            date: todayLabel, time: $0.time)
+            }
+    }
+
+    private var todayLabel: String {
+        let f = DateFormatter(); f.dateFormat = "M月d日"; return f.string(from: Date())
+    }
+
+    // 胃壁板：在我的/对方模式下，把今日真实贴纸追加在 Mock 之上（动态）
+    private var boardStickers: [BoardSticker] {
+        let mock = CardMock.board(for: mode)
+        guard mode == .me else { return mock }
+        let extras = todayFoodStickers.enumerated().map { i, s in
+            // 在板右上角区域错落摆放真实贴纸
+            let lefts: [CGFloat] = [0.30, 0.62, 0.45, 0.78, 0.20]
+            let tops:  [CGFloat] = [0.30, 0.45, 0.62, 0.72, 0.18]
+            let idx = i % lefts.count
+            return BoardSticker(sticker: s,
+                                left: lefts[idx],
+                                top: tops[idx],
+                                angle: Double(idx * 7 - 14),
+                                scale: 0.82,
+                                zIndex: 10 + i)
+        }
+        return mock + extras
+    }
+
+    private var boardCalories: Int {
+        let mock = CardMock.totalCalories(for: mode)
+        let real = todayFoodStickers.reduce(0) { $0 + $1.cal }
+        return mode == .me ? mock + real : mock
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: CardTokens.Spacing.section) {
-                CardTopBar(nickname: nickname)
+                CardTopBar(nickname: nickname, onProfileTap: onProfile)
 
                 // 对齐 Web：今天 + 我的/对方的 + 右侧两个图标按钮
                 HStack {
@@ -1598,21 +1725,23 @@ struct CardPageView: View {
                         .font(.app(size: FontSize.lg, weight: .bold))
                         .foregroundColor(CardTokens.Color.foreground)
                     Spacer()
-                    Text("总计 \(CardMock.totalCalories(for: mode)) Kcal")
+                    Text("总计 \(boardCalories) Kcal")
                         .font(.app(size: FontSize.sm))
                         .foregroundColor(CardTokens.Color.foregroundMuted)
                 }
                 .padding(.horizontal, CardTokens.Spacing.h)
                 .padding(.vertical, 8)
 
-                BellyCharacterView(stickers: CardMock.board(for: mode), selected: $selected, totalCalories: CardMock.totalCalories(for: mode))
+                BellyCharacterView(stickers: boardStickers, selected: $selected, totalCalories: boardCalories)
 
                 CalorieBudgetCard(
                     target: (mode == .me ? AppDataStore.shared.profile : AppDataStore.shared.partnerProfile).calorieTarget,
-                    consumed: CardMock.totalCalories(for: mode)
+                    consumed: boardCalories
                 )
 
-                FoodRecordList(records: CardMock.stickers(for: mode)) { r in
+                // 今日记录：真实展示今天保存的食物（动态加载 AppDataStore.todayRecords），非静态 Mock
+                let records = mode == .me ? todayFoodStickers : CardMock.stickers(for: .him)
+                FoodRecordList(records: records) { r in
                     selected = r
                 }
 
@@ -1620,9 +1749,14 @@ struct CardPageView: View {
             }
         }
         .background(CardTokens.Color.background)
+        // todayRecords / savedStickers 变更 → 仅刷新依赖子视图，避免 .id() 整页重建导致 OOM
+        .onChange(of: store.todayRecords.count) { _ in /* 触发 todayFoodStickers/boardStickers/boardCalories 重算 */ }
+        .onChange(of: store.savedStickers.count) { _ in /* 同上 */ }
         .fullScreenCover(item: $selected) { sticker in
             // 使用完整贴纸列表（与 Web 一致），保证从"今日记录"或胃壁板任一入口打开都能定位
-            let stickers = CardMock.stickers(for: mode)
+            let stickers = mode == .me
+                ? (todayFoodStickers + CardMock.stickers(for: .me))
+                : CardMock.stickers(for: .him)
             let idx = stickers.firstIndex(where: { $0.id == sticker.id }) ?? 0
             StickerDetailView(stickers: stickers, initialIndex: idx)
         }

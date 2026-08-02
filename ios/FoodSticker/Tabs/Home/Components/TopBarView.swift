@@ -33,12 +33,11 @@ struct TopBarView: View {
 
             Spacer()
 
-            // 右侧：个人中心入口
+            // 右侧：个人中心入口（用户头像，未设置时用默认头像）
             Button(action: { onProfileTap?() }) {
-                Image(systemName: "person.crop.circle")
-                    .font(.app(size: 24))
-                    .foregroundColor(HomeTokens.Color.foregroundMuted)
+                AvatarView(AvatarStore.shared.avatarImage, size: 40)
             }
+            .buttonStyle(.plain)
         }
         .padding(.top, HomeTokens.Spacing.topBarTop)
         .padding(.bottom, HomeTokens.Spacing.topBarBottom)

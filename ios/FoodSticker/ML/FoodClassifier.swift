@@ -30,11 +30,12 @@ final class FoodClassifier {
     /// 后台异步加载模型（编译 + 加载均在后台线程，避免主线程阻塞警告）
     static func load() async throws -> FoodClassifier {
         let cfg = MLModelConfiguration()
-        cfg.computeUnits = .all
+        cfg.computeUnits = .cpuAndGPU   // 避免 ANE 不兼容导致模型加载失败
         guard let modelURL = Bundle.main.url(forResource: "FoodClassifierModel", withExtension: "mlpackage") else {
             throw ClassifierError.modelNotFound("FoodClassifierModel.mlpackage")
         }
-        let model = try await MLModel.load(contentsOf: modelURL, configuration: cfg)
+        let compiledURL = try await MLModel.compileModel(at: modelURL)
+        let model = try await MLModel.load(contentsOf: compiledURL, configuration: cfg)
         guard let url = Bundle.main.url(forResource: "labels_1000", withExtension: "txt") else {
             throw ClassifierError.modelNotFound("labels_1000.txt")
         }

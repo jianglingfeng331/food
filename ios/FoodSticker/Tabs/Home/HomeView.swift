@@ -4,6 +4,8 @@ import SwiftUI
 
 struct HomeView: View {
     let nickname: String = "小鹿"
+    /// 点击右上角「我的」头像时触发（由 HomeViewController 注入，present 个人中心页）
+    var onProfile: (() -> Void)? = nil
 
     // 模拟数据 (实际应来自 AppDataStore)
     @State private var exerciseCalories: Int = 256
@@ -73,7 +75,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     // 1. 顶部栏
-                    TopBarView(nickname: nickname)
+                    TopBarView(nickname: nickname, onProfileTap: onProfile)
 
                     // 2. 主内容区 (对应 Web <main>)
                     VStack(spacing: 0) {

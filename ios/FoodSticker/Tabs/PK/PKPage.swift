@@ -1011,12 +1011,23 @@ struct WaterSection: View {
 // MARK: =====================================================================
 
 struct PKPageView: View {
+    let store: AppDataStore
+    @ObservedObject var binding: PKBindingCoordinator
+    var onBind: () -> Void
+    var onScan: () -> Void
+    var onMyQR: () -> Void
+    var onUnbind: () -> Void
+    var onProfile: (() -> Void)? = nil
+
+    @State private var isGuest: Bool = AuthService.shared.isGuest
+
     var body: some View {
         VStack(spacing: 0) {
-            CardTopBar(nickname: PKMock.me.name)
+            CardTopBar(nickname: nickname, onProfileTap: onProfile)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: PKTokens.Layout.sectionGap) {
+                    relationCard
                     BattleReportCard()
                     CalorieSection()
                     WeightSection()
@@ -1029,9 +1040,103 @@ struct PKPageView: View {
             }
         }
         .background(PKTokens.Color.background.ignoresSafeArea())
+        .onReceive(NotificationCenter.default.publisher(for: .authDidChange)) { _ in
+            isGuest = AuthService.shared.isGuest
+        }
+    }
+
+    // 当前用户昵称（登录用真实昵称，游客用本地档案）
+    private var nickname: String {
+        AuthService.shared.currentUser?.nickname ?? store.profile.name
+    }
+
+    // MARK: PK 关系卡片
+    @ViewBuilder
+    private var relationCard: some View {
+        if let opp = binding.opponent {
+            // 已绑定
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    Text(opp.avatar)
+                        .font(.app(size: 28))
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(PKTokens.Color.rivalBadgeBg))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("已与 \(opp.nickname) 绑定 PK")
+                            .font(.app(size: 15, weight: .semibold))
+                            .foregroundColor(PKTokens.Color.foreground)
+                        Text("点击下方查看本周对战详情")
+                            .font(.app(size: 12))
+                            .foregroundColor(PKTokens.Color.subtle)
+                    }
+                    Spacer()
+                    Button(action: onUnbind) {
+                        Text("解绑")
+                            .font(.app(size: 13, weight: .medium))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Capsule().fill(Color.red.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .pkFlatCard()
+        } else {
+            // 未绑定
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.2.circle")
+                        .font(.app(size: 30))
+                        .foregroundColor(PKTokens.Color.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("还没有 PK 对手")
+                            .font(.app(size: 15, weight: .semibold))
+                            .foregroundColor(PKTokens.Color.foreground)
+                        Text(isGuest ? "登录后可邀请好友与你 PK" : "扫码或分享你的二维码邀请好友")
+                            .font(.app(size: 12))
+                            .foregroundColor(PKTokens.Color.subtle)
+                    }
+                    Spacer()
+                }
+                HStack(spacing: 10) {
+                    // 主按钮：游客→登录，已登录→扫码绑定
+                    Button(action: isGuest ? onBind : onScan) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "qrcode.viewfinder")
+                            Text(isGuest ? "登录并绑定" : "扫码绑定")
+                        }
+                        .font(.app(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Capsule().fill(PKTokens.Color.primary))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onMyQR) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "qrcode")
+                            Text("我的码")
+                        }
+                        .font(.app(size: 14, weight: .medium))
+                        .foregroundColor(PKTokens.Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Capsule().fill(PKTokens.Color.primaryBg10))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .pkFlatCard()
+        }
     }
 }
 
 #Preview {
-    PKPageView()
+    PKPageView(
+        store: AppDataStore.shared,
+        binding: PKBindingCoordinator.shared,
+        onBind: {}, onScan: {}, onMyQR: {}, onUnbind: {}
+    )
+    .environmentObject(PKBindingCoordinator.shared)
 }

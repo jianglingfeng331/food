@@ -598,3 +598,210 @@ public struct RotateCcwIcon: Shape {
         return path.applying(CGAffineTransform(scaleX: scale, y: scale))
     }
 }
+
+// MARK: - user (UserIcon) — 默认头像 / 本人
+
+/// lucide-react: user | viewBox: 0 0 24 24 | stroke-width: 2
+public struct UserIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // 身体：M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2
+        path.move(to: CGPoint(x: 19, y: 21))
+        path.addLine(to: CGPoint(x: 19, y: 19))
+        path.addLine(to: CGPoint(x: 15, y: 19))
+        path.addQuadCurve(to: CGPoint(x: 9, y: 19), control: CGPoint(x: 9, y: 19))
+        path.addLine(to: CGPoint(x: 5, y: 19))
+        path.addLine(to: CGPoint(x: 5, y: 21))
+        // 头：circle cx=12 cy=7 r=4
+        path.addEllipse(in: CGRect(x: 8, y: 3, width: 8, height: 8))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - chevron-right (ChevronRightIcon)
+
+/// lucide-react: chevron-right | viewBox: 0 0 24 24 | stroke-width: 2
+public struct ChevronRightIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        path.move(to: CGPoint(x: 9, y: 6))
+        path.addLine(to: CGPoint(x: 15, y: 12))
+        path.addLine(to: CGPoint(x: 9, y: 18))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - settings (SettingsIcon)
+
+/// lucide-react: settings | viewBox: 0 0 24 24 | stroke-width: 2（齿轮：外环 + 中心孔 + 四辐条）
+public struct SettingsIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        path.addEllipse(in: CGRect(x: 4, y: 4, width: 16, height: 16))
+        path.addEllipse(in: CGRect(x: 10, y: 10, width: 4, height: 4))
+        // 四辐条
+        path.move(to: CGPoint(x: 12, y: 2)); path.addLine(to: CGPoint(x: 12, y: 5))
+        path.move(to: CGPoint(x: 12, y: 19)); path.addLine(to: CGPoint(x: 12, y: 22))
+        path.move(to: CGPoint(x: 2, y: 12)); path.addLine(to: CGPoint(x: 5, y: 12))
+        path.move(to: CGPoint(x: 19, y: 12)); path.addLine(to: CGPoint(x: 22, y: 12))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - log-out (LogOutIcon)
+
+/// lucide-react: log-out | viewBox: 0 0 24 24 | stroke-width: 2
+public struct LogOutIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4
+        path.move(to: CGPoint(x: 9, y: 21))
+        path.addLine(to: CGPoint(x: 5, y: 21))
+        path.addQuadCurve(to: CGPoint(x: 3, y: 19), control: CGPoint(x: 3, y: 21))
+        path.addLine(to: CGPoint(x: 3, y: 5))
+        path.addQuadCurve(to: CGPoint(x: 5, y: 3), control: CGPoint(x: 3, y: 3))
+        path.addLine(to: CGPoint(x: 9, y: 3))
+        // m16 17 5-5-5-5
+        path.move(to: CGPoint(x: 16, y: 17))
+        path.addLine(to: CGPoint(x: 21, y: 12))
+        path.addLine(to: CGPoint(x: 16, y: 7))
+        // M21 12H9
+        path.move(to: CGPoint(x: 21, y: 12))
+        path.addLine(to: CGPoint(x: 9, y: 12))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - pencil (PencilIcon) — 编辑昵称
+
+/// lucide-react: pencil | viewBox: 0 0 24 24 | stroke-width: 2（简化钢笔）
+public struct PencilIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // M12 20h9
+        path.move(to: CGPoint(x: 12, y: 20))
+        path.addLine(to: CGPoint(x: 21, y: 20))
+        // M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z
+        path.move(to: CGPoint(x: 16.5, y: 3.5))
+        path.addLine(to: CGPoint(x: 19.5, y: 6.5))
+        path.addLine(to: CGPoint(x: 7, y: 19))
+        path.addLine(to: CGPoint(x: 4, y: 20))
+        path.addLine(to: CGPoint(x: 5, y: 16))
+        path.addLine(to: CGPoint(x: 16.5, y: 3.5))
+        path.closeSubpath()
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - check (CheckIcon) — 保存
+
+/// lucide-react: check | viewBox: 0 0 24 24 | stroke-width: 2
+public struct CheckIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        path.move(to: CGPoint(x: 20, y: 6))
+        path.addLine(to: CGPoint(x: 9, y: 17))
+        path.addLine(to: CGPoint(x: 4, y: 12))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - trash-2 (TrashIcon) — 删除
+
+/// lucide-react: trash-2 | viewBox: 0 0 24 24 | stroke-width: 2
+public struct TrashIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // M3 6h18
+        path.move(to: CGPoint(x: 3, y: 6))
+        path.addLine(to: CGPoint(x: 21, y: 6))
+        // M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6
+        path.move(to: CGPoint(x: 19, y: 6))
+        path.addLine(to: CGPoint(x: 19, y: 20))
+        path.addQuadCurve(to: CGPoint(x: 17, y: 22), control: CGPoint(x: 19, y: 22))
+        path.addLine(to: CGPoint(x: 7, y: 22))
+        path.addQuadCurve(to: CGPoint(x: 5, y: 20), control: CGPoint(x: 5, y: 22))
+        path.addLine(to: CGPoint(x: 5, y: 6))
+        // M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2
+        path.move(to: CGPoint(x: 8, y: 6))
+        path.addLine(to: CGPoint(x: 8, y: 4))
+        path.addQuadCurve(to: CGPoint(x: 10, y: 2), control: CGPoint(x: 8, y: 2))
+        path.addLine(to: CGPoint(x: 14, y: 2))
+        path.addQuadCurve(to: CGPoint(x: 16, y: 4), control: CGPoint(x: 16, y: 2))
+        path.addLine(to: CGPoint(x: 16, y: 6))
+        // M10 11v6  /  M14 11v6
+        path.move(to: CGPoint(x: 10, y: 11)); path.addLine(to: CGPoint(x: 10, y: 17))
+        path.move(to: CGPoint(x: 14, y: 11)); path.addLine(to: CGPoint(x: 14, y: 17))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - trending-up (TrendingUpIcon) — 体重趋势
+
+/// lucide-react: trending-up | viewBox: 0 0 24 24 | stroke-width: 2
+public struct TrendingUpIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // M22 7l-8.5 8.5-5-5L2 17
+        path.move(to: CGPoint(x: 22, y: 7))
+        path.addLine(to: CGPoint(x: 13.5, y: 15.5))
+        path.addLine(to: CGPoint(x: 9.5, y: 11.5))
+        path.addLine(to: CGPoint(x: 2, y: 19))
+        // M16 7h6v6（末端上升箭头）
+        path.move(to: CGPoint(x: 16, y: 7))
+        path.addLine(to: CGPoint(x: 22, y: 7))
+        path.addLine(to: CGPoint(x: 22, y: 13))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+/// lucide-react: bell | viewBox: 0 0 24 24 | stroke-width: 2
+public struct BellIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9
+        path.move(to: CGPoint(x: 6, y: 8))
+        path.addQuadCurve(to: CGPoint(x: 18, y: 8), control: CGPoint(x: 18, y: 1.5))
+        path.addLine(to: CGPoint(x: 21, y: 17))
+        path.addLine(to: CGPoint(x: 3, y: 17))
+        path.addLine(to: CGPoint(x: 6, y: 8))
+        // M10.3 21a1.94 1.94 0 0 0 3.4 0
+        path.move(to: CGPoint(x: 10.3, y: 21))
+        path.addQuadCurve(to: CGPoint(x: 13.7, y: 21), control: CGPoint(x: 12, y: 23))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - log-in (LogInIcon) — 注册 / 登录
+
+/// lucide-react: log-in | viewBox: 0 0 24 24 | stroke-width: 2
+public struct LogInIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4
+        path.move(to: CGPoint(x: 15, y: 3))
+        path.addLine(to: CGPoint(x: 19, y: 3))
+        path.addQuadCurve(to: CGPoint(x: 21, y: 5), control: CGPoint(x: 21, y: 3))
+        path.addLine(to: CGPoint(x: 21, y: 19))
+        path.addQuadCurve(to: CGPoint(x: 19, y: 21), control: CGPoint(x: 21, y: 21))
+        path.addLine(to: CGPoint(x: 15, y: 21))
+        // m10 17 5-5-5-5
+        path.move(to: CGPoint(x: 10, y: 17))
+        path.addLine(to: CGPoint(x: 15, y: 12))
+        path.addLine(to: CGPoint(x: 10, y: 7))
+        // M21 12H10
+        path.move(to: CGPoint(x: 21, y: 12))
+        path.addLine(to: CGPoint(x: 10, y: 12))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}

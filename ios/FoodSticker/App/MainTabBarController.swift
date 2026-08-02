@@ -210,23 +210,20 @@ final class MainTabBarController: UIViewController {
     }
 
     @objc private func cameraTapped() {
-        let sheet = UIAlertController(title: "选择相机模式", message: nil, preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: "食物相机", style: .default) { [weak self] _ in
-            guard let self else { return }
-            let nav = UINavigationController()
-            let root = UIHostingController(rootView: CameraPage(nav: nav))
-            nav.viewControllers = [root]
-            nav.modalPresentationStyle = .fullScreen
-            self.present(nav, animated: true)
-        })
-        sheet.addAction(UIAlertAction(title: "实时抠图贴纸工坊", style: .default) { [weak self] _ in
-            guard let self else { return }
-            let flow = StickerFlowViewController()
-            let nav = UINavigationController(rootViewController: flow)
-            self.present(nav, animated: true)
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        present(sheet, animated: true)
+        // 关键操作：未登录先要求登录，登录成功后进入相机
+        AuthCoordinator.shared.requireLogin(from: self) { [weak self] in
+            self?.openCamera()
+        }
+    }
+
+    private func openCamera() {
+        let nav = UINavigationController()
+        var page = CameraPage()
+        page.nav = nav
+        let root = UIHostingController(rootView: page)
+        nav.viewControllers = [root]
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     // MARK: - 点击状态反馈 (缩放动画)

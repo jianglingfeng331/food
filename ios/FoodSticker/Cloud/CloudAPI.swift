@@ -6,8 +6,8 @@ final class CloudAPI {
     static let shared = CloudAPI()
 
     /// 本地联调地址：
-    /// - 模拟器用 127.0.0.1（本机 FastAPI）。
-    /// - 真机调试需改为 Mac 局域网 IP（如 192.168.1.10:8000），并保持后端运行。
+    /// - 通过 pymobiledevice3 usbmux forward 将 iPhone localhost:8000 经 USB 线转接到 Mac。
+    /// - 模拟器同样用 127.0.0.1，直接映射到 Mac 本地，无需额外配置。
     #if DEBUG
     private var base: URL {
         return URL(string: "http://127.0.0.1:8000")!

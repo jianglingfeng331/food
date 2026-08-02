@@ -9,7 +9,7 @@ final class ResultsViewController: UIViewController {
     private let original: UIImage
     private let pipeline: StickerPipeline
     private var currentFood: FoodInfo?
-    private let composer = StickerComposer()
+    private let exporter = StickerExporter()
 
     // MARK: - UI
 
@@ -205,13 +205,13 @@ final class ResultsViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func saveTapped() {
-        composer.saveToAlbum(result.sticker) { [weak self] ok in
+        exporter.saveToAlbum(result.sticker) { [weak self] ok in
             self?.toast(ok ? "已保存到相册" : "保存失败，请检查相册权限")
         }
     }
 
     @objc private func shareTapped() {
-        composer.share(result.sticker, nutrition: nutritionText(for: currentFood), from: self)
+        exporter.share(result.sticker, nutrition: nutritionText(for: currentFood), from: self)
     }
 
     @objc private func hdTapped() {

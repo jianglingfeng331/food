@@ -9,7 +9,9 @@ final class HomeViewController: UIViewController {
         super.viewDidLoad()
         navigationController?.setNavigationBarHidden(true, animated: false)
 
-        let homeView = HomeView()
+        let homeView = HomeView(onProfile: { [weak self] in
+            self?.openProfile()
+        })
         let hosting = UIHostingController(rootView: homeView)
         addChild(hosting)
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
@@ -21,5 +23,12 @@ final class HomeViewController: UIViewController {
             hosting.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         hosting.didMove(toParent: self)
+    }
+
+    // MARK: - 打开「我的」
+
+    private func openProfile() {
+        let nav = UINavigationController(rootViewController: ProfileViewController())
+        present(nav, animated: true)
     }
 }

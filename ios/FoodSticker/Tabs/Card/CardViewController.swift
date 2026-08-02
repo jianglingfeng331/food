@@ -9,7 +9,9 @@ final class CardViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 248/255, green: 248/255, blue: 248/255, alpha: 1)
 
-        let hosting = UIHostingController(rootView: CardPageView())
+        let hosting = UIHostingController(rootView: CardPageView(onProfile: { [weak self] in
+            self?.openProfile()
+        }))
         addChild(hosting)
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(hosting.view)
@@ -20,6 +22,14 @@ final class CardViewController: UIViewController {
             hosting.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
         hosting.didMove(toParent: self)
+    }
+
+    // MARK: - 打开「我的」
+
+    private func openProfile() {
+        let nav = UINavigationController(rootViewController: ProfileViewController())
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {
