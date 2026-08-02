@@ -355,6 +355,9 @@ struct CameraPage: View {
     @State private var selectedServings: Int = 1
     @State private var pendingItems: [LibraryPendingItem] = []
 
+    // 从贴纸仓库异步加载的贴纸列表（取代 CardMock 硬编码）
+    @State private var repoStickers: [FoodSticker] = []
+
     var body: some View {
         ZStack {
             CameraPageTokens.background.ignoresSafeArea()
@@ -409,6 +412,10 @@ struct CameraPage: View {
                     .padding(.bottom, 90)
                     .transition(.opacity)
             }
+        }
+        .task {
+            // 从贴纸仓库异步加载贴纸列表（替换 CardMock 硬编码）
+            repoStickers = await AppDataStore.shared.fetchStickersAsFoodStickers()
         }
     }
 
@@ -555,8 +562,10 @@ struct CameraPage: View {
             Text("选择已有食物")
                 .font(CameraPageTokens.font(CameraPageTokens.fsLg, .semibold))
                 .foregroundColor(CameraPageTokens.foreground)
-            // “选择已有”数据源 = 内置预设 + 用户保存/预设的食物（去重：同 id 不重复）
-            let builtIn = CardMock.stickers(for: .me)
+            // "选择已有"数据源 = 仓库贴纸 + 用户保存/预设的食物（去重）
+            let builtIn = repoStickers.isEmpty
+                ? CardMock.stickers(for: .me)
+                : repoStickers
             let userItems = AppDataStore.shared.savedStickers.filter { u in
                 !builtIn.contains { $0.id == u.id }
             }

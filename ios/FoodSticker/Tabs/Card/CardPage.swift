@@ -1642,7 +1642,9 @@ struct CardPageView: View {
     @State private var selected: FoodSticker?
     /// 点击顶部「我的」头像入口
     var onProfile: (() -> Void)? = nil
-    private var nickname: String { mode == .me ? "小鹿" : "阿泽" }
+    private var nickname: String {
+        mode == .me ? store.profile.name : "阿泽"
+    }
 
     // 今日真实保存的食物（来自 AppDataStore.todayRecords，动态加载）
     private var todayFoodStickers: [FoodSticker] {

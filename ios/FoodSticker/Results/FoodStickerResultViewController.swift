@@ -500,6 +500,7 @@ final class FoodStickerResultViewController: UIViewController {
         if preset {
             if let sticker = buildFoodSticker() {
                 AppDataStore.shared.addSavedSticker(sticker)
+                AppDataStore.shared.uploadFoodStickerToRepo(sticker)
             }
         }
 

@@ -158,3 +158,44 @@ protocol PKRepository: AnyObject {
     /// 提交每日记录后通知服务端更新 PK 汇总
     func submitDailyRecord() async throws
 }
+
+// MARK: - 类型桥接（StickerItem ↔ FoodSticker）
+
+extension StickerItem {
+    /// 将仓库层的 StickerItem 转换为视图层的 FoodSticker
+    func toFoodSticker() -> FoodSticker {
+        let df = DateFormatter()
+        df.dateFormat = "M月d日"
+        let tf = DateFormatter()
+        tf.dateFormat = "HH:mm"
+        let ratio = typicalPortionG / 100.0
+        return FoodSticker(
+            imageName: "",
+            uiImage: imageData.flatMap { UIImage(data: $0) },
+            name: name,
+            cal: Int(kcalPer100g * ratio),
+            date: df.string(from: createdAt),
+            time: tf.string(from: createdAt),
+            protein: Int(proteinG * ratio),
+            carbs: Int(carbG * ratio),
+            fat: Int(fatG * ratio),
+            fiber: 0,
+            sugar: 0,
+            salt: 0,
+            tip: ""
+        )
+    }
+}
+
+extension FoodSticker {
+    /// 从视图层 FoodSticker 提取可上传到仓库的营养信息
+    func toStickerNutrition() -> StickerNutrition {
+        StickerNutrition(
+            kcalPer100g: Double(max(cal, 1)),
+            proteinG: Double(protein ?? 0),
+            carbG: Double(carbs ?? 0),
+            fatG: Double(fat ?? 0),
+            typicalPortionG: 100
+        )
+    }
+}

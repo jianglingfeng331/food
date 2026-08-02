@@ -85,9 +85,25 @@ final class MockStickerRepository: StickerRepository {
     }
 
     private static func buildMockItems() -> [StickerItem] {
-        // 直接复用 AppDataStore 或 CardMock 的贴纸数据
-        // 这里使用简洁的占位列表，实际接入时从 AppDataStore.shared.savedStickers 映射
-        return []
+        // 从 CardMock 内建贴纸映射为 StickerItem，确保仓库有数据可用
+        let source = CardMock.stickers(for: .me) + CardMock.stickers(for: .him)
+        return source.enumerated().map { i, s in
+            StickerItem(
+                id: "mock-preset-\(i)",
+                name: s.name,
+                imageURL: nil,
+                imageData: s.uiImage?.pngData(),
+                thumbnailData: nil,
+                kcalPer100g: Double(s.cal),
+                proteinG: Double(s.protein),
+                carbG: Double(s.carbs),
+                fatG: Double(s.fat),
+                typicalPortionG: 100,
+                useCount: 0,
+                isPreset: true,
+                createdAt: Date()
+            )
+        }
     }
 
     func fetchStickers() async throws -> [StickerItem] {
@@ -145,7 +161,7 @@ final class MockStickerRepository: StickerRepository {
     }
 
     func markUsed(id: String) async throws {
-        guard let idx = items.firstIndex(where: { $0.id == $0.id }) else { return }
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let old = items[idx]
         items[idx] = StickerItem(
             id: old.id, name: old.name, imageURL: old.imageURL,

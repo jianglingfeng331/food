@@ -610,7 +610,9 @@ struct StickerResultView: View {
 
         // 3) 仅「保存并预设」才进入预设列表，避免「保存」误存到预设
         if preset {
-            AppDataStore.shared.addSavedSticker(sticker)
+            let store = AppDataStore.shared
+            store.addSavedSticker(sticker)
+            store.uploadFoodStickerToRepo(sticker)
         }
 
         // 4) 将最终营养数据缓存到 state（remove 后 task 为 nil，nutrition 需要回退源）

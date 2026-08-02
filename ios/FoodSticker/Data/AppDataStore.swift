@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - 数据类型
 
@@ -215,6 +216,54 @@ final class AppDataStore: ObservableObject {
 
     func removeSavedSticker(_ id: UUID) {
         savedStickers.removeAll { $0.id == id }
+    }
+
+    // MARK: - 贴纸仓库桥接（Phase 3）
+
+    /// 从 stickerRepo 获取贴纸列表并转为 FoodSticker（异步，含 CardMock 降级）
+    func fetchStickersAsFoodStickers() async -> [FoodSticker] {
+        let repo = stickerRepo
+        do {
+            let items = try await repo.fetchStickers()
+            guard !items.isEmpty else {
+                // 仓库无数据时降级使用 CardMock 预设
+                return CardMock.stickers(for: .me) + CardMock.stickers(for: .him)
+            }
+            return items.map { $0.toFoodSticker() }
+        } catch {
+            print("[AppDataStore] Sticker repo fetch failed: \(error)")
+            return CardMock.stickers(for: .me) + CardMock.stickers(for: .him)
+        }
+    }
+
+    /// 将 FoodSticker 异步上传到贴纸仓库（仅 preset 时调用）
+    func uploadFoodStickerToRepo(_ sticker: FoodSticker) {
+        let repo = stickerRepo
+        Task {
+            do {
+                let nutrition = sticker.toStickerNutrition()
+                _ = try await repo.uploadSticker(
+                    image: sticker.uiImage ?? UIImage(),
+                    name: sticker.name,
+                    nutrition: nutrition
+                )
+            } catch {
+                print("[AppDataStore] Sticker upload to repo failed: \(error)")
+            }
+        }
+    }
+
+    /// 从贴纸仓库删除指定名称的贴纸
+    func deleteStickerFromRepo(named name: String) async {
+        let repo = stickerRepo
+        do {
+            let items = try await repo.fetchStickers()
+            if let target = items.first(where: { $0.name == name }) {
+                try await repo.deleteSticker(id: target.id)
+            }
+        } catch {
+            print("[AppDataStore] Sticker delete from repo failed: \(error)")
+        }
     }
 
     // MARK: - 云端同步（替代硬编码 mock）
