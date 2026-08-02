@@ -77,6 +77,34 @@ struct UserProfile {
 final class AppDataStore: ObservableObject {
     static let shared = AppDataStore()
 
+    // MARK: Repository 注入（默认 Mock 确保 UI 无感过渡）
+
+    /// 首页仪表盘仓库（根据登录态自动切换 Guest/Mock/Remote）
+    var dashboardRepo: DashboardRepository = GuestDashboardRepository()
+
+    /// 贴纸仓库
+    var stickerRepo: StickerRepository = MockStickerRepository()
+
+    /// PK 仓库
+    var pkRepo: PKRepository = MockPKRepository()
+
+    /// 切换为远程仓库（后端就绪后调用）
+    func useRemoteRepositories() {
+        dashboardRepo = RemoteDashboardRepository()
+        stickerRepo = RemoteStickerRepository()
+        pkRepo = RemotePKRepository()
+    }
+
+    /// 根据当前登录状态更新仪表盘仓库
+    func refreshDashboardRepo() {
+        if AuthService.shared.isLoggedIn {
+            // 已登录：使用 Mock（后端就绪后改为 RemoteDashboardRepository()）
+            dashboardRepo = MockDashboardRepository()
+        } else {
+            dashboardRepo = GuestDashboardRepository()
+        }
+    }
+
     // 用户信息
     var profile = UserProfile()
     var partnerProfile: UserProfile = {

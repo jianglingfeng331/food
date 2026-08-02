@@ -21,6 +21,9 @@
 		B10000000000000000000C /* StickerComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000C /* StickerComposer.swift */; };
 		B10000000000000000000D /* ResultsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000D /* ResultsViewController.swift */; };
 		B10000000000000000000E /* AppDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000E /* AppDataStore.swift */; };
+		B700000000000000000001 /* RepositoryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F700000000000000000001 /* RepositoryProtocol.swift */; };
+		B700000000000000000002 /* MockRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F700000000000000000002 /* MockRepository.swift */; };
+		B700000000000000000003 /* RemoteRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F700000000000000000003 /* RemoteRepository.swift */; };
 		B10000000000000000000F /* MainTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000F /* MainTabBarController.swift */; };
 		B100000000000000000010 /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000010 /* HomeViewController.swift */; };
 		B100000000000000000011 /* PKViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000011 /* PKViewController.swift */; };
@@ -102,6 +105,9 @@
 		F10000000000000000000C /* StickerComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerComposer.swift; sourceTree = "<group>"; };
 		F10000000000000000000D /* ResultsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsViewController.swift; sourceTree = "<group>"; };
 		F10000000000000000000E /* AppDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataStore.swift; sourceTree = "<group>"; };
+		F700000000000000000001 /* RepositoryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryProtocol.swift; sourceTree = "<group>"; };
+		F700000000000000000002 /* MockRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRepository.swift; sourceTree = "<group>"; };
+		F700000000000000000003 /* RemoteRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteRepository.swift; sourceTree = "<group>"; };
 		F10000000000000000000F /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
 		F100000000000000000010 /* HomeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewController.swift; sourceTree = "<group>"; };
 		F100000000000000000011 /* PKViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKViewController.swift; sourceTree = "<group>"; };
@@ -310,6 +316,9 @@ G110000000000000000003 /* ML */ = {
 			isa = PBXGroup;
 			children = (
 				F10000000000000000000E /* AppDataStore.swift */,
+				F700000000000000000001 /* RepositoryProtocol.swift */,
+				F700000000000000000002 /* MockRepository.swift */,
+				F700000000000000000003 /* RemoteRepository.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -581,6 +590,9 @@ G110000000000000000003 /* ML */ = {
 				B10000000000000000000C /* StickerComposer.swift in Sources */,
 				B10000000000000000000D /* ResultsViewController.swift in Sources */,
 				B10000000000000000000E /* AppDataStore.swift in Sources */,
+				B700000000000000000001 /* RepositoryProtocol.swift in Sources */,
+				B700000000000000000002 /* MockRepository.swift in Sources */,
+				B700000000000000000003 /* RemoteRepository.swift in Sources */,
 				B10000000000000000000F /* MainTabBarController.swift in Sources */,
 				B100000000000000000010 /* HomeViewController.swift in Sources */,
 				B100000000000000000011 /* PKViewController.swift in Sources */,
