@@ -37,7 +37,8 @@ struct ActionRowView: View {
     let progress: Double          // 0...100
     let value: String
     let meta: String
-    var onTap: () -> Void
+    var onTap: () -> Void         // 点击 + 按钮
+    var onRowTap: (() -> Void)?   // 点击整行（nil 则不响应整行点击）
 
     var body: some View {
         HStack(spacing: HomeTokens.Spacing.actionHGap) {
@@ -52,6 +53,10 @@ struct ActionRowView: View {
         }
         .padding(.vertical, HomeTokens.Spacing.cardGap12)
         .padding(.horizontal, HomeTokens.Spacing.cardPaddingH)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onRowTap?()
+        }
         .flatCard()
         .padding(.bottom, HomeTokens.Spacing.cardGap10)
     }

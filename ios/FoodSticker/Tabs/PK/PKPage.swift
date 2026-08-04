@@ -40,18 +40,18 @@ enum PKTokens {
         static let winBadge:    CGFloat = 11   // 赢 X 项
         static let compareHead: CGFloat = 12   // 单项对比
         static let metricLabel: CGFloat = 12   // 指标名
-        static let metricLead:  CGFloat = 11   // XX 领先
-        static let metricValue: CGFloat = 11   // 条上数值
+        static let metricLead:  CGFloat = 12   // XX 领先
+        static let metricValue: CGFloat = 13   // 条上数值
         static let sectionTitle:CGFloat = 16   // 区块标题
         static let legend:      CGFloat = 12
         static let segBtn:      CGFloat = 12
         static let caption:     CGFloat = 12   // 图下说明
-        static let captionSm:   CGFloat = 11
+        static let captionSm:   CGFloat = 12
         static let exName:      CGFloat = 13
         static let exValue:     CGFloat = 15
         static let ballPct:     CGFloat = 22   // 水球中心百分比
         static let ballLabel:   CGFloat = 13
-        static let ballGoal:    CGFloat = 11
+        static let ballGoal:    CGFloat = 13
         static let trendHead:   CGFloat = 13   // 每日饮水量趋势
         static let weightNote:  CGFloat = 12
     }
@@ -100,7 +100,7 @@ enum PKTokens {
 
 struct PKUser {
     let name: String
-    let avatar: String
+    let avatar: UIImage?   // 已上传头像；为 nil 时显示默认未上传占位图
     let intake: [Double]
     let burned: [Double]
     let exerciseMin: [Double]
@@ -113,23 +113,19 @@ enum PKMock {
     static let days = ["一", "二", "三", "四", "五", "六", "日"]
     static let today = 5   // 周六
 
-    static let me = PKUser(
-        name: "小鹿", avatar: "AvatarMe",
-        intake: [1450, 1520, 1380, 1600, 1490, 1700, 1400],
-        burned: [320, 280, 410, 350, 300, 460, 380],
-        exerciseMin: [45, 38, 55, 47, 40, 65, 52],
-        weights: [58.2, 58.0, 57.7, 57.9, 57.5, 57.3, 57.1],
-        waterGoal: 2000,
-        water: [1300, 1500, 1600, 1400, 1500, 1700, 1500])
+    /// 清空态（数据已清空）：所有数值为 0，头像为 nil（默认占位图）
+    static let empty = PKUser(
+        name: "", avatar: nil,
+        intake: [0,0,0,0,0,0,0],
+        burned: [0,0,0,0,0,0,0],
+        exerciseMin: [0,0,0,0,0,0,0],
+        weights: [0,0,0,0,0,0,0],
+        waterGoal: 0,
+        water: [0,0,0,0,0,0,0])
 
-    static let rival = PKUser(
-        name: "小宇", avatar: "AvatarRival",
-        intake: [1280, 1350, 1420, 1300, 1450, 1250, 1380],
-        burned: [260, 300, 240, 350, 280, 320, 290],
-        exerciseMin: [35, 42, 33, 50, 40, 45, 39],
-        weights: [55.6, 55.4, 55.5, 55.2, 55.0, 54.9, 54.7],
-        waterGoal: 1800,
-        water: [1100, 1300, 1400, 1200, 1300, 1450, 1300])
+    // 已清零：与 empty 一致，避免默认假数据干扰测试
+    static let me = empty
+    static let rival = empty
 
     // ── 汇总指标（与 Web metrics 完全一致） ──
     struct Metric {
@@ -245,14 +241,10 @@ struct PKLegend: View {
 
 // Avatar：圆形 + 2px 白色 ring + shadow-sm
 struct PKAvatar: View {
-    let imageName: String
+    let image: UIImage?
     var size: CGFloat = PKTokens.Layout.avatarSize
     var body: some View {
-        Image(imageName)
-            .resizable()
-            .scaledToFill()
-            .frame(width: size, height: size)
-            .clipShape(Circle())
+        AvatarView(image, size: size)
             .overlay(Circle().stroke(Color.white, lineWidth: 2))
             .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
     }
@@ -297,77 +289,105 @@ struct BattleReportCard: View {
     var meWins: Int = PKMock.meWins
     var rivalWins: Int = PKMock.rivalWins
     var metrics: [PKMock.Metric] = PKMock.metrics
+    /// 是否已绑定对手：未绑定时只展示自己的数据，不显示对战与皇冠
+    var hasOpponent: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部 6px 渐变条
-            LinearGradient(colors: [PKTokens.Color.me, PKTokens.Color.rival],
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(height: PKTokens.Layout.stripH)
-
             // 标题行
             HStack {
-                Text("本周 PK 战报")
+                Text("本周战报")
                     .font(.app(size: PKTokens.Font.cardHeader, weight: .semibold))
                     .foregroundColor(PKTokens.Color.foreground)
                 Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "trophy")
-                        .font(.app(size: 12))
-                    Text("第 12 周")
-                        .font(.app(size: PKTokens.Font.weekTag))
+                if hasOpponent {
+                    Text("VS")
+                        .font(.app(size: 13, weight: .bold))
+                        .foregroundColor(PKTokens.Color.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(PKTokens.Color.primaryBg10))
                 }
-                .foregroundColor(PKTokens.Color.primary)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.top, 16)
             .padding(.bottom, 4)
 
-            // 对手头部
-            HStack(alignment: .top, spacing: 0) {
-                userColumn(user: meUser, crowned: leaderIsMe,
-                           wins: meWins,
-                           badgeBg: PKTokens.Color.primaryBg10,
-                           badgeFg: PKTokens.Color.primary)
-                    .frame(maxWidth: .infinity)
+            if hasOpponent {
+                // 已绑定：双栏对战头部
+                HStack(alignment: .top, spacing: 0) {
+                    userColumn(user: meUser, crowned: leaderIsMe,
+                               wins: meWins,
+                               badgeBg: PKTokens.Color.primaryBg10,
+                               badgeFg: PKTokens.Color.primary)
+                        .frame(maxWidth: .infinity)
 
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(colors: [PKTokens.Color.me, PKTokens.Color.rival],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: PKTokens.Layout.vsCircle, height: PKTokens.Layout.vsCircle)
-                        .shadow(color: PKTokens.Shadow.vs,
-                                radius: PKTokens.Shadow.vsRadius, y: PKTokens.Shadow.vsY)
-                    SwordsGlyph()
+                    Text("VS")
+                        .font(.app(size: 14, weight: .bold))
+                        .foregroundColor(PKTokens.Color.sub)
+                        .frame(width: PKTokens.Layout.vsColW)
+                        .frame(maxHeight: .infinity)
+
+                    userColumn(user: rivalUser, crowned: !leaderIsMe,
+                               wins: rivalWins,
+                               badgeBg: PKTokens.Color.rivalBadgeBg,
+                               badgeFg: PKTokens.Color.rival)
+                        .frame(maxWidth: .infinity)
                 }
-                .frame(width: PKTokens.Layout.vsColW)
-                .frame(maxHeight: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
 
-                userColumn(user: rivalUser, crowned: !leaderIsMe,
-                           wins: rivalWins,
-                           badgeBg: PKTokens.Color.rivalBadgeBg,
-                           badgeFg: PKTokens.Color.rival)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-
-            // 单项对比
-            VStack(alignment: .leading, spacing: 0) {
-                Divider().overlay(PKTokens.Color.divider)
-                Text("单项对比")
-                    .font(.app(size: PKTokens.Font.compareHead, weight: .medium))
-                    .foregroundColor(PKTokens.Color.muted)
-                    .padding(.top, 14)
-                    .padding(.bottom, 12)
-                VStack(spacing: PKTokens.Layout.metricGap) {
-                    ForEach(metrics, id: \.label) { m in
-                        MetricCompareRow(metric: m)
+                // 单项对比
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider().overlay(PKTokens.Color.divider)
+                    Text("单项对比")
+                        .font(.app(size: PKTokens.Font.compareHead, weight: .medium))
+                        .foregroundColor(PKTokens.Color.muted)
+                        .padding(.top, 14)
+                        .padding(.bottom, 12)
+                    VStack(spacing: PKTokens.Layout.metricGap) {
+                        ForEach(metrics, id: \.label) { m in
+                            MetricCompareRow(metric: m)
+                        }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+            } else {
+                // 未绑定：仅展示自己的数据
+                HStack(alignment: .center, spacing: 0) {
+                    PKAvatar(image: meUser.avatar)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(meUser.name)
+                            .font(.app(size: PKTokens.Font.userName, weight: .bold))
+                            .foregroundColor(PKTokens.Color.foreground)
+                        Text("绑定对手后开启对战")
+                            .font(.app(size: 12))
+                            .foregroundColor(PKTokens.Color.subtle)
+                    }
+                    .padding(.leading, 12)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+
+                // 仅自己的数据
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider().overlay(PKTokens.Color.divider)
+                    Text("我的数据")
+                        .font(.app(size: PKTokens.Font.compareHead, weight: .medium))
+                        .foregroundColor(PKTokens.Color.muted)
+                        .padding(.top, 14)
+                        .padding(.bottom, 12)
+                    VStack(spacing: 10) {
+                        ForEach(metrics, id: \.label) { m in
+                            selfMetricRow(label: m.label, value: m.meText)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
         }
         .background(
             RoundedRectangle(cornerRadius: PKTokens.Layout.cardRadius)
@@ -382,10 +402,22 @@ struct BattleReportCard: View {
         .clipShape(RoundedRectangle(cornerRadius: PKTokens.Layout.cardRadius))
     }
 
+    private func selfMetricRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.app(size: PKTokens.Font.metricLabel))
+                .foregroundColor(PKTokens.Color.muted)
+            Spacer()
+            Text(value)
+                .font(.app(size: PKTokens.Font.metricValue, weight: .medium))
+                .foregroundColor(PKTokens.Color.foreground)
+        }
+    }
+
     private func userColumn(user: PKUser, crowned: Bool, wins: Int,
                             badgeBg: Color, badgeFg: Color) -> some View {
         VStack(spacing: 0) {
-            PKAvatar(imageName: user.avatar)
+            PKAvatar(image: user.avatar)
                 .overlay(alignment: .topTrailing) {
                     if crowned {
                         Image(systemName: "crown.fill")
@@ -420,6 +452,7 @@ struct MetricCompareRow: View {
 
     var body: some View {
         let meWin = metric.meWin
+        let isTie = metric.me == metric.rival
         let maxV = max(metric.me, metric.rival, 1)
 
         VStack(spacing: 6) {
@@ -428,7 +461,7 @@ struct MetricCompareRow: View {
                     .font(.app(size: PKTokens.Font.metricLabel))
                     .foregroundColor(PKTokens.Color.muted)
                 Spacer()
-                Text("\(meWin ? meName : rivalName) 领先")
+                Text(isTie ? "" : "\(meWin ? meName : rivalName) 领先")
                     .font(.app(size: PKTokens.Font.metricLead, weight: .medium))
                     .foregroundColor(meWin ? PKTokens.Color.me : PKTokens.Color.rival)
             }
@@ -548,11 +581,11 @@ struct PKBarChart: View {
                         .position(x: (xb + barW / 2) * s, y: (y1 - hb / 2) * s)
                     // 数值标签
                     Text(String(Int(a[i])))
-                        .font(.app(size: 8 * s))
+                        .font(.app(size: 11 * s, weight: .medium))
                         .foregroundColor(PKTokens.Color.me)
                         .position(x: (xa + barW / 2) * s, y: (y1 - ha - 6) * s)
                     Text(String(Int(b[i])))
-                        .font(.app(size: 8 * s))
+                        .font(.app(size: 11 * s, weight: .medium))
                         .foregroundColor(PKTokens.Color.rival)
                         .position(x: (xb + barW / 2) * s, y: (y1 - hb - 6) * s)
                     // 星期
@@ -647,10 +680,10 @@ struct PKLineChart: View {
                     ctx.stroke(dot, with: .color(color), lineWidth: 2)
                 }
                 ctx.draw(Text(String(format: "%.1f", a[i]))
-                            .font(.app(size: 7.5)).foregroundColor(PKTokens.Color.me),
+                            .font(.app(size: 10, weight: .medium)).foregroundColor(PKTokens.Color.me),
                          at: CGPoint(x: pa.x, y: pa.y - 10), anchor: .center)
                 ctx.draw(Text(String(format: "%.1f", b[i]))
-                            .font(.app(size: 7.5)).foregroundColor(PKTokens.Color.rival),
+                            .font(.app(size: 10, weight: .medium)).foregroundColor(PKTokens.Color.rival),
                          at: CGPoint(x: pb.x, y: pb.y + 10), anchor: .center)
             }
             // 星期
@@ -856,6 +889,7 @@ struct WaterBallView: View {
                 }
                 .frame(width: size, height: size)
             }
+            .id(pct)  // 强制 TimelineView 在水位变化时重建，确保百分比随之更新
 
             Text(label)
                 .font(.app(size: PKTokens.Font.ballLabel, weight: .medium))
@@ -961,7 +995,7 @@ struct PKWaterTrend: View {
                     ctx.fill(dot, with: .color(.white))
                     ctx.stroke(dot, with: .color(color), lineWidth: 2)
                     ctx.draw(Text(String(Int(arr[i])))
-                                .font(.app(size: 8)).foregroundColor(color),
+                                .font(.app(size: 10, weight: .medium)).foregroundColor(color),
                              at: CGPoint(x: pt.x, y: pt.y + dy), anchor: .center)
                 }
             }
@@ -987,11 +1021,13 @@ struct WaterSection: View {
 
             HStack(alignment: .top) {
                 Spacer()
-                WaterBallView(pct: min(1, me.water[today] / me.waterGoal),
+                let mePct = me.waterGoal > 0 ? min(1, me.water[today] / me.waterGoal) : 0
+                WaterBallView(pct: mePct,
                               color: PKTokens.Color.me, label: me.name,
                               goalMl: Int(me.waterGoal), todayMl: Int(me.water[today]))
                 Spacer()
-                WaterBallView(pct: min(1, rival.water[today] / rival.waterGoal),
+                let rivalPct = rival.waterGoal > 0 ? min(1, rival.water[today] / rival.waterGoal) : 0
+                WaterBallView(pct: rivalPct,
                               color: PKTokens.Color.rival, label: rival.name,
                               goalMl: Int(rival.waterGoal), todayMl: Int(rival.water[today]))
                 Spacer()
@@ -1027,8 +1063,9 @@ struct WaterSection: View {
 // MARK: =====================================================================
 
 struct PKPageView: View {
-    let store: AppDataStore
+    @ObservedObject var store: AppDataStore
     @ObservedObject var binding: PKBindingCoordinator
+    @ObservedObject private var avatarStore = AvatarStore.shared
     var onBind: () -> Void
     var onScan: () -> Void
     var onMyQR: () -> Void
@@ -1036,9 +1073,6 @@ struct PKPageView: View {
     var onProfile: (() -> Void)? = nil
 
     @State private var isGuest: Bool = AuthService.shared.isGuest
-
-    /// 从 PKRepository 加载的本周对战数据（nil = 尚未加载 / 加载失败，回退 PKMock）
-    @State private var weeklyData: PKWeeklyData?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1053,7 +1087,8 @@ struct PKPageView: View {
                         leaderIsMe: leaderIsMe,
                         meWins: meWins,
                         rivalWins: rivalWins,
-                        metrics: weeklyMetrics
+                        metrics: weeklyMetrics,
+                        hasOpponent: binding.opponent != nil
                     )
                     CalorieSection(me: meData, rival: rivalData)
                     WeightSection(me: meData, rival: rivalData)
@@ -1069,86 +1104,94 @@ struct PKPageView: View {
         .onReceive(NotificationCenter.default.publisher(for: .authDidChange)) { _ in
             isGuest = AuthService.shared.isGuest
         }
-        .task {
-            await loadWeeklyData()
-        }
     }
 
-    // MARK: 桥接属性（weeklyData → PKMock 兼容类型）
+    // MARK: 桥接属性（AppDataStore 真实数据 → PKMock 兼容类型）
 
-    /// 从仓库数据映射为我方 PKUser，数据缺失时回退 PKMock
+    /// 从本地真实数据映射为我方 PKUser（数据清空时全为 0，联动首页清空状态）
     private var meData: PKUser {
-        guard let w = weeklyData else { return PKMock.me }
-        let p = w.me
+        let intake = Double(store.todayCaloriesConsumed)
+        let burned = Double(store.todayExerciseCalories)
+        let waterGoal = Double(store.profile.waterGoal)
+        let water = Double(store.todayWaterIntake)
+        let weight = store.todayWeight
+        let exerciseMin = Double(store.todayRecords.filter { $0.type == .exercise }.reduce(0) { $0 + Int($1.amount) })
         return PKUser(
-            name: p.nickname, avatar: "AvatarMe",
-            intake: p.dailyIntake.map(Double.init),
-            burned: p.dailyBurned.map(Double.init),
-            exerciseMin: p.exerciseMinutes.map(Double.init),
-            weights: p.weights,
-            waterGoal: Double(p.waterGoalML),
-            water: p.waterML.map(Double.init)
+            name: (avatarStore.nickname != "未登录" && !avatarStore.nickname.isEmpty)
+                ? avatarStore.nickname
+                : (store.profile.name.isEmpty ? "我" : store.profile.name),
+            avatar: avatarStore.avatarImage,
+            intake: [intake, 0, 0, 0, 0, 0, 0],
+            burned: [burned, 0, 0, 0, 0, 0, 0],
+            exerciseMin: [exerciseMin, 0, 0, 0, 0, 0, 0],
+            weights: [weight, 0, 0, 0, 0, 0, 0],
+            waterGoal: waterGoal,
+            water: [water, 0, 0, 0, 0, 0, 0]
         )
     }
 
-    /// 从仓库数据映射为对手 PKUser
+    /// 从本地真实数据映射为对手 PKUser（未绑定/清空时全为 0）
     private var rivalData: PKUser {
-        guard let w = weeklyData else { return PKMock.rival }
-        let p = w.opponent
+        let p = store.partnerProfile
         return PKUser(
-            name: p.nickname, avatar: "AvatarRival",
-            intake: p.dailyIntake.map(Double.init),
-            burned: p.dailyBurned.map(Double.init),
-            exerciseMin: p.exerciseMinutes.map(Double.init),
-            weights: p.weights,
-            waterGoal: Double(p.waterGoalML),
-            water: p.waterML.map(Double.init)
+            name: p.name.isEmpty ? "对手" : p.name,
+            avatar: nil,
+            intake: [0, 0, 0, 0, 0, 0, 0],
+            burned: [0, 0, 0, 0, 0, 0, 0],
+            exerciseMin: [0, 0, 0, 0, 0, 0, 0],
+            weights: [p.currentWeight, 0, 0, 0, 0, 0, 0],
+            waterGoal: Double(p.waterGoal),
+            water: [0, 0, 0, 0, 0, 0, 0]
         )
     }
 
     private var leaderIsMe: Bool {
-        weeklyData?.leaderIsMe ?? PKMock.leaderIsMe
+        meData.intake.reduce(0, +) <= rivalData.intake.reduce(0, +) && meData.burned.reduce(0, +) >= rivalData.burned.reduce(0, +)
     }
 
     private var meWins: Int {
-        weeklyData?.meWinsTotal ?? PKMock.meWins
+        let my = (meData.intake.first ?? 0)
+        let rival = (rivalData.intake.first ?? 0)
+        // 摄入更低 / 消耗更高 计为赢
+        var wins = 0
+        if my <= rival { wins += 1 }                       // 平均每日摄入
+        if meData.burned.first ?? 0 >= rivalData.burned.first ?? 0 { wins += 1 } // 总运动消耗
+        if (meData.weights.first ?? 0) <= (rivalData.weights.first ?? 0) { wins += 1 } // 减重
+        if (meData.water.first ?? 0) >= (rivalData.water.first ?? 0) { wins += 1 }     // 饮水
+        return wins
     }
 
-    private var rivalWins: Int {
-        weeklyData?.opponentWinsTotal ?? PKMock.rivalWins
-    }
+    private var rivalWins: Int { 4 - meWins }
 
     private var weeklyMetrics: [PKMock.Metric] {
-        guard let w = weeklyData, !w.metrics.isEmpty else { return PKMock.metrics }
-        return w.metrics.map { m in
-            PKMock.Metric(
-                label: m.label,
-                me: m.myValue,
-                rival: m.opponentValue,
-                unit: "",
-                lowerBetter: true
-            )
-        }
+        let myIn = meData.intake.first ?? 0
+        let rivalIn = rivalData.intake.first ?? 0
+        let myBurn = meData.burned.first ?? 0
+        let rivalBurn = rivalData.burned.first ?? 0
+        let myWeight = meData.weights.first ?? 0
+        let rivalWeight = rivalData.weights.first ?? 0
+        let myWater = meData.water.first ?? 0
+        let rivalWater = rivalData.water.first ?? 0
+        return [
+            PKMock.Metric(label: "平均每日摄入", me: myIn, rival: rivalIn, unit: " kcal", lowerBetter: true),
+            PKMock.Metric(label: "总运动消耗", me: myBurn, rival: rivalBurn, unit: " kcal", lowerBetter: false),
+            PKMock.Metric(label: "本周减重", me: myWeight, rival: rivalWeight, unit: " kg", lowerBetter: false),
+            PKMock.Metric(label: "饮水达标率", me: min(100, myWater), rival: min(100, rivalWater), unit: "%", lowerBetter: false),
+        ]
     }
 
-    /// 今日在一周中的索引（0=周一 ... 6=周日），仓库无数据时使用 PKMock.today
+    /// 今日在一周中的索引（0=周一 ... 6=周日）
     private var todayIndex: Int {
-        weeklyData != nil
-            ? Calendar.current.component(.weekday, from: Date()) - 1 // 0=Sun...6=Sat
-            : PKMock.today
+        let wd = Calendar.current.component(.weekday, from: Date()) // 1=Sun...7=Sat
+        return (wd + 5) % 7 // 转成 0=Mon...6=Sun
     }
 
-    private func loadWeeklyData() async {
-        do {
-            weeklyData = try await store.pkRepo.fetchWeeklyData()
-        } catch {
-            print("[PKPage] Weekly data fetch failed: \(error)")
-        }
-    }
-
-    // 当前用户昵称（登录用真实昵称，游客用本地档案）
+    // 当前用户昵称（优先 AvatarStore 全站中枢，回退 AuthService / profile）
     private var nickname: String {
-        AuthService.shared.currentUser?.nickname ?? store.profile.name
+        let avatarName = avatarStore.nickname
+        if avatarName != "未登录" && !avatarName.isEmpty { return avatarName }
+        let n = AuthService.shared.currentUser?.nickname ?? store.profile.name
+        return n.isEmpty ? "我" : n
     }
 
     // MARK: PK 关系卡片

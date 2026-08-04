@@ -564,7 +564,7 @@ private struct Preset: Identifiable {
 
 struct ExerciseModalView: View {
     @Binding var savedSports: [SavedSport]
-    let onConfirm: (String, Int) -> Void
+    let onConfirm: (String, Int, Int) -> Void // name, calories, durationMinutes
     let onDismiss: () -> Void
 
     private let presets: [Preset] = [
@@ -658,17 +658,17 @@ struct ExerciseModalView: View {
             PrimaryButton(title: "确认记录", isEnabled: canConfirm) {
                 if mode == .preset {
                     guard let name = selected else { return }
-                    onConfirm(name, calories)
+                    onConfirm(name, calories, duration)
                 } else {
                     let name = customName.trimmingCharacters(in: .whitespaces)
-                    onConfirm(name, calories)
+                    onConfirm(name, calories, duration)
                 }
             }
             if mode == .custom {
                 SecondaryButton(title: "保存并确认", isEnabled: canConfirm) {
                     let name = customName.trimmingCharacters(in: .whitespaces)
                     savedSports.append(SavedSport(name: name, rate: customRate))
-                    onConfirm(name, calories)
+                    onConfirm(name, calories, duration)
                 }
                 .padding(.top, HomeModalTokens.Button.secondaryTopMargin)
             }
@@ -682,12 +682,14 @@ struct ExerciseModalView: View {
             Button {
                 selected = (selected == p.name) ? nil : p.name
             } label: {
-                HStack(spacing: HomeModalTokens.Exercise.chipRateSpacing) {
+                VStack(spacing: 2) {
                     Text(p.name)
                         .font(.app(size: HomeModalTokens.Exercise.chipFont))
+                        .fixedSize(horizontal: true, vertical: false)
                     Text("\(p.rate) kcal")
                         .font(.app(size: HomeModalTokens.Exercise.chipRateFont))
                         .opacity(HomeModalTokens.Exercise.chipRateOpacity)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .foregroundColor(selected == p.name
                                  ? HomeModalTokens.Exercise.chipSelectedText
@@ -911,6 +913,170 @@ struct WaterModalView: View {
                     onConfirm(value)
                 }
             }
+        }
+    }
+}
+
+// MARK: - 运动记录清单（可查看、可删除）
+
+struct ExerciseRecordListSheet: View {
+    let records: [DailyRecord]
+    let onDelete: (IndexSet) -> Void
+    let onAdd: () -> Void
+    let onDismiss: () -> Void
+
+    @State private var confirmDeleteIndex: Int?
+
+    var body: some View {
+        BottomSheet(title: "运动记录", onDismiss: onDismiss) {
+            VStack(spacing: 0) {
+                if records.isEmpty {
+                    emptyView
+                } else {
+                    recordList
+                }
+
+                // 底部新增按钮
+                PrimaryButton(title: "新增运动") {
+                    onDismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        onAdd()
+                    }
+                }
+                .padding(.top, records.isEmpty ? 0 : 16)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
+            }
+        }
+    }
+
+    // MARK: 空状态
+
+    private var emptyView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "flame.circle")
+                .font(.system(size: 40))
+                .foregroundColor(HomeTokens.Color.foregroundMuted.opacity(0.5))
+            Text("暂无运动记录")
+                .font(.app(size: 15, weight: .medium))
+                .foregroundColor(HomeTokens.Color.foregroundMuted)
+            Text("点击下方按钮开始记录运动")
+                .font(.app(size: 12))
+                .foregroundColor(HomeTokens.Color.foregroundSubtle)
+        }
+        .padding(.vertical, 48)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: 记录列表
+
+    private var recordList: some View {
+        VStack(spacing: 0) {
+            // 汇总行
+            summaryHeader
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
+
+            Divider().background(HomeTokens.Color.foregroundMuted.opacity(0.1))
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(records.enumerated()), id: \.element.id) { idx, rec in
+                        rowView(idx: idx, rec: rec)
+                    }
+                }
+            }
+            .frame(maxHeight: 320)
+        }
+    }
+
+    private var summaryHeader: some View {
+        let totalCals = records.reduce(0) { $0 + $1.calories }
+        let totalDuration = records.reduce(0) { $0 + $1.amount }
+        return HStack {
+            Label("共 \(records.count) 项运动", systemImage: "figure.run")
+                .font(.app(size: 13, weight: .medium))
+                .foregroundColor(HomeTokens.Color.foregroundMuted)
+            Spacer()
+            Text("消耗 \(totalCals) kcal | 时长 \(Int(totalDuration)) min")
+                .font(.app(size: 12))
+                .foregroundColor(HomeTokens.Color.foregroundSubtle)
+        }
+    }
+
+    private func exerciseEmoji(_ name: String) -> String {
+        let map: [String: String] = [
+            "跑步": "🏃", "慢跑": "🏃", "快走": "🚶", "散步": "🚶", "走路": "🚶",
+            "力量训练": "🏋️", "健身": "🏋️", "举重": "🏋️",
+            "游泳": "🏊", "骑行": "🚴", "骑车": "🚴", "自行车": "🚴",
+            "瑜伽": "🧘", "跳绳": "🪢", "篮球": "🏀", "足球": "⚽",
+            "羽毛球": "🏸", "乒乓球": "🏓", "网球": "🎾",
+            "HIIT": "🔥", "搏击": "🥊", "拳击": "🥊", "登山": "🧗",
+        ]
+        for (key, emoji) in map {
+            if name.contains(key) { return emoji }
+        }
+        return "🔥"
+    }
+
+    private func rowView(idx: Int, rec: DailyRecord) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // 左侧运动图标
+                Text(exerciseEmoji(rec.name))
+                    .font(.title3)
+
+                // 中间信息
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(rec.name.isEmpty ? "运动" : rec.name)
+                        .font(.app(size: 15, weight: .medium))
+                        .foregroundColor(HomeTokens.Color.foreground)
+                    HStack(spacing: 8) {
+                        Label("\(rec.calories) kcal", systemImage: "bolt.fill")
+                            .font(.app(size: 12))
+                            .foregroundColor(HomeTokens.Color.primary)
+                        Label("\(Int(rec.amount)) min", systemImage: "timer")
+                            .font(.app(size: 12))
+                            .foregroundColor(HomeTokens.Color.foregroundSubtle)
+                        Text(rec.time)
+                            .font(.app(size: 11))
+                            .foregroundColor(HomeTokens.Color.foregroundSubtle)
+                    }
+                }
+
+                Spacer()
+
+                // 右侧删除按钮
+                Button {
+                    confirmDeleteIndex = idx
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14))
+                        .foregroundColor(HomeTokens.Color.foregroundMuted.opacity(0.6))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            if idx < records.count - 1 {
+                Divider()
+                    .padding(.leading, 62)
+                    .background(HomeTokens.Color.foregroundMuted.opacity(0.06))
+            }
+        }
+        .alert("删除运动记录", isPresented: Binding(
+            get: { confirmDeleteIndex == idx },
+            set: { if !$0 { confirmDeleteIndex = nil } }
+        )) {
+            Button("取消", role: .cancel) { confirmDeleteIndex = nil }
+            Button("删除", role: .destructive) {
+                onDelete(IndexSet(integer: idx))
+                confirmDeleteIndex = nil
+            }
+        } message: {
+            Text("确定要删除「\(rec.name)」这条运动记录吗？")
         }
     }
 }

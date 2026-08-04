@@ -150,7 +150,7 @@ final class VisionSegmentationHelper {
         var loaded: MattingEngine?
         Task.detached {
             do {
-                let tier = StickerPipeline.detectTier()
+                let tier = DeviceTier.detect()
                 loaded = try await MattingEngine.load(tier: tier)
             } catch {
                 print("⚠️ MobileSAM 加载失败：\(error.localizedDescription)")
@@ -199,7 +199,7 @@ final class VisionSegmentationHelper {
 
         let results = request.results ?? []
         print("[Vision] request.results.count = \(results.count)")
-        guard let obs = results.first as? VNInstanceMaskObservation else {
+        guard let obs = results.first else {
             print("⚠️ [Vision] 未取到 VNInstanceMaskObservation（Vision 认为图像中无明显前景实例，返回空）")
             return nil
         }

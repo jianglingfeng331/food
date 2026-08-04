@@ -489,18 +489,39 @@ final class FoodStickerResultViewController: UIViewController {
         let finalName = edited.isEmpty ? n.foodName : edited
         let cal = Int(round(n.calories))
 
-        // 1) 写入今日记录 / 胃袋（本地持久化，离线也可留存）
+        // 预先构造贴纸（含完整营养成分/小贴士/图片），供下方写入今日记录与预设共用
+        let stickerImage = stickerIV.image
+        let sticker = buildFoodSticker()
+        let protein = sticker?.protein ?? 0
+        let carbs = sticker?.carbs ?? 0
+        let fat = sticker?.fat ?? 0
+        let fiber = sticker?.fiber ?? 0
+        let sugar = sticker?.sugar ?? 0
+        let salt = sticker?.salt ?? 0
+        let tip = sticker?.tip ?? ""
+
+        // 1) 写入今日记录 / 胃袋（本地持久化，含图片、营养成分、小贴士，确保回显完整）
         AppDataStore.shared.addRecord(DailyRecord(
             type: .food,
             name: finalName,
             calories: cal,
-            amount: 100))
+            amount: 100,
+            imageData: stickerImage?.pngData(),
+            protein: protein, carbs: carbs, fat: fat,
+            fiber: fiber, sugar: sugar, salt: salt, tip: tip))
 
         // 2) 仅「保存并预设」才进入预设列表，避免「保存」误存到预设
         if preset {
-            if let sticker = buildFoodSticker() {
-                AppDataStore.shared.addSavedSticker(sticker)
-                AppDataStore.shared.uploadFoodStickerToRepo(sticker)
+            if var s = sticker {
+                s = FoodSticker(imageName: s.imageName,
+                                uiImage: stickerImage,
+                                name: s.name, cal: s.cal,
+                                date: s.date, time: s.time,
+                                protein: s.protein, carbs: s.carbs,
+                                fat: s.fat, fiber: s.fiber,
+                                sugar: s.sugar, salt: s.salt, tip: s.tip)
+                AppDataStore.shared.addSavedSticker(s)
+                AppDataStore.shared.uploadFoodStickerToRepo(s)
             }
         }
 

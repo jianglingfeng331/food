@@ -7,8 +7,8 @@ import UIKit
 /// 二维码 / 输码 统一承载的结构。
 /// Mock 阶段纯端侧，真实上线可加密签名防止伪造。
 struct PKCode: Codable, Equatable {
-    let v: Int = 1
-    let t: String = "pk"          // type = pk 绑定
+    var v: Int = 1
+    var t: String = "pk"          // type = pk 绑定
     let uid: String               // 对方 uid
     let nick: String              // 昵称
     let av: String                // emoji 头像

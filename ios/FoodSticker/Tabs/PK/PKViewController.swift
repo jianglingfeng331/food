@@ -10,8 +10,7 @@ final class PKViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "PK"
-        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationController?.setNavigationBarHidden(true, animated: false)
         renderPK()
 
         NotificationCenter.default.addObserver(self, selector: #selector(rerender),

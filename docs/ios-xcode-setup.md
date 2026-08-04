@@ -41,25 +41,14 @@ xcodegen generate
 
 ---
 
-## 4. 加入模型权重与营养库（关键！否则流水线会抛错）
+## 4. 资源说明（当前仅营养库与端侧抠图模型）
 
-`StickerPipeline` 在初始化时加载三个端侧模型，缺失时会抛错（界面会弹「处理失败」提示）。请按 `tools/` 脚本产出后，把产物放进 `ios/FoodSticker/Resources/`，再重新 `xcodegen generate`：
+当前主流程的 AI 推理（卡通贴纸、识别、营养）全部在云端完成，移动端只需：
 
-| 资源 | 产出方式 | 放置路径 |
-|------|----------|----------|
-| MobileSAM 抠图模型 | `tools/convert_mobilesam.py` | `Resources/matting.mlpackage` |
-| AnimeGANv3 卡通化 | `tools/finetune_animegan.py` + `tools/convert_animegan.py` | `Resources/cartoon.mlpackage` |
-| EfficientNet 分类 | `tools/convert_efficientnet.py` | `Resources/classifier.mlpackage` |
-| 分类标签 | 随 EfficientNet 导出 | `Resources/labels_1000.txt` |
-| 营养库 SQLite | `tools/build_nutrition_db.py`（需你提供《中国食物成分表》CSV） | `Resources/nutrition.db` |
+- **营养库 SQLite**：`tools/build_nutrition_db.py` 产出 `nutrition.db`，加入 Bundle（用于端侧快速查表兜底）。
+- **MobileSAM 端侧抠图预览（可选，当前为占位）**：模型文件 `MobileSAMEncoder.mlpackage` / `MobileSAMDecoder.mlpackage` 需在有 GPU 的环境跑 `tools/` 脚本生成后放入 `Resources/`。未配置时抠图预览不可用，但主链路不受影响（主链路走云端）。
 
-放置完成后重新执行：
-
-```bash
-cd food-sticker-app/ios && xcodegen generate
-```
-
-> XcodeGen 会把这些资源作为 Bundle Resource 自动拷贝进 App。
+> 历史端侧能力（AnimeGAN 卡通化、EfficientNet 分类、`StickerPipeline` 调度）已移除，无需再加入对应模型。
 
 ---
 
@@ -93,20 +82,16 @@ ios/
     ├── App/
     │   ├── AppDelegate.swift        # 标准 @main 入口
     │   ├── SceneDelegate.swift      # UIWindowScene + 导航根 = 相机
-    │   └── Router.swift             # 相机→流水线→结果页 串联
+    │   └── Router.swift             # 相机→云端流水线→结果页 串联
     ├── Camera/
     │   └── CameraViewController.swift
-    ├── ML/                          # Matting / Cartoonize / Classifier / TensorUtils
+    ├── ML/                          # Matting（MobileSAM 占位）/ TensorUtils
     ├── Sticker/
-    │   └── StickerComposer.swift
-    ├── Pipeline/
-    │   └── StickerPipeline.swift
+    │   └── StickerComposer.swift   # 导出/分享工具
     ├── Nutrition/
     │   └── NutritionDB.swift
     ├── Cloud/
     │   └── CloudAPI.swift
-    ├── Results/
-    │   └── ResultsViewController.swift   # 结果展示页（新增）
     └── Resources/
         ├── Assets.xcassets          # AppIcon / AccentColor
         └── LaunchScreen.storyboard

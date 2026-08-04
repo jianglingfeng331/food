@@ -154,7 +154,7 @@ struct StickerResultView: View {
     }
     /// 当前展示用图片：优先成图，其次缩略图/原图；任务被移除（已保存）时回退到缓存图
     private var displayImage: UIImage? {
-        if let t = task { return t.stickerImage ?? t.preview ?? t.sourceImage }
+        if let t = task { return t.stickerImage }
         return state.previewImage
     }
     /// 由 createdAt 推导的日期（MM月dd日）与时间（HH:mm）
@@ -269,7 +269,7 @@ struct StickerResultView: View {
                     .font(.srText(SRTheme.Font.status))
                     .foregroundColor(SRTheme.foregroundMuted)
                 Spacer(minLength: 0)
-            } else if let n = nutrition {
+            } else if nutrition != nil {
                 basicInfo
                 nutrientCard
                 tipCard
@@ -601,12 +601,20 @@ struct StickerResultView: View {
             t.name = name
         }
 
-        // 2) 写入「今日记录 / 胃袋」（可点开查看详情）
+        // 2) 写入「今日记录 / 胃袋」（可点开查看详情，含完整营养与小贴士）
         AppDataStore.shared.addRecord(DailyRecord(
             type: .food,
             name: sticker.name,
             calories: sticker.cal,
-            amount: Double(task?.grams ?? 100)))
+            amount: Double(task?.grams ?? 100),
+            imageData: sticker.uiImage?.pngData(),
+            protein: sticker.protein,
+            carbs: sticker.carbs,
+            fat: sticker.fat,
+            fiber: sticker.fiber,
+            sugar: sticker.sugar,
+            salt: sticker.salt,
+            tip: sticker.tip))
 
         // 3) 仅「保存并预设」才进入预设列表，避免「保存」误存到预设
         if preset {

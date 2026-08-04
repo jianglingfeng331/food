@@ -562,12 +562,12 @@ struct CameraPage: View {
             Text("选择已有食物")
                 .font(CameraPageTokens.font(CameraPageTokens.fsLg, .semibold))
                 .foregroundColor(CameraPageTokens.foreground)
-            // "选择已有"数据源 = 仓库贴纸 + 用户保存/预设的食物（去重）
+            // "选择已有"数据源 = 仓库贴纸 + 用户保存/预设的食物（按名称去重）
             let builtIn = repoStickers.isEmpty
                 ? CardMock.stickers(for: .me)
                 : repoStickers
             let userItems = AppDataStore.shared.savedStickers.filter { u in
-                !builtIn.contains { $0.id == u.id }
+                !builtIn.contains { $0.name == u.name }
             }
             let items = builtIn + userItems
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 12) {
@@ -981,14 +981,18 @@ struct CaptureDetailSheet: View {
         let n = t.name.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { return }
         if let info = NutritionDB.shared.search(name: n) {
+            let (kc, pr, cb, ft, tg, pg, gr) = (
+                info.kcal100g, info.proteinG, info.carbG, info.fatG,
+                info.typicalG, info.portionG, info.portionG ?? info.typicalG
+            )
             store.update(taskID) {
-                $0.kcal100g = info.kcal100g
-                $0.proteinG = info.proteinG
-                $0.carbG = info.carbG
-                $0.fatG = info.fatG
-                $0.typicalG = info.typicalG
-                $0.portionG = info.portionG
-                $0.grams = (info.portionG ?? info.typicalG) ?? 100
+                $0.kcal100g = kc
+                $0.proteinG = pr
+                $0.carbG = cb
+                $0.fatG = ft
+                $0.typicalG = tg
+                $0.portionG = pg
+                $0.grams = gr
             }
         }
     }
@@ -1073,22 +1077,43 @@ struct CaptureDetailSheet: View {
     }
 
     private func recordToStomach(_ t: CaptureTask) {
+        let n = t.cloudNutrition
+        let imageData = t.stickerImage?.pngData()
+        let ratio = t.grams / 100.0
         AppDataStore.shared.addRecord(DailyRecord(type: .food, name: t.name,
-            calories: t.caloriesNow, amount: t.grams))
+            calories: t.caloriesNow, amount: t.grams, imageData: imageData,
+            protein: Int(round(t.proteinG * ratio)),
+            carbs: Int(round(t.carbG * ratio)),
+            fat: Int(round(t.fatG * ratio)),
+            fiber: Int(round((n?.dietaryFiber ?? 0) * ratio)),
+            sugar: 0,
+            salt: (n?.sodium ?? 0) / 1000,
+            tip: n?.vitaminTips ?? ""))
         store.update(taskID) { $0.status = .logged }
         dismiss()
     }
 
     private func recordAndPreset(_ t: CaptureTask) {
+        let stickerImage = t.stickerImage
+        let imageData = stickerImage?.pngData()
+        let ratio = t.grams / 100.0
+        let n = t.cloudNutrition
+        let protein = Int(round(t.proteinG * ratio))
+        let carbs = Int(round(t.carbG * ratio))
+        let fat = Int(round(t.fatG * ratio))
+        let fiber = Int(round((n?.dietaryFiber ?? 0) * ratio))
+        let salt = (n?.sodium ?? 0) / 1000
+        let tip = n?.vitaminTips ?? ""
+        // 写入今日记录（含图片、完整营养成分，确保回显完整）
         AppDataStore.shared.addRecord(DailyRecord(type: .food, name: t.name,
-            calories: t.caloriesNow, amount: t.grams))
+            calories: t.caloriesNow, amount: t.grams, imageData: imageData,
+            protein: protein, carbs: carbs, fat: fat,
+            fiber: fiber, sugar: 0, salt: salt, tip: tip))
         AppDataStore.shared.addSavedSticker(FoodSticker(
-            imageName: "", name: t.name, cal: t.caloriesNow,
+            imageName: "", uiImage: stickerImage, name: t.name, cal: t.caloriesNow,
             date: todayDate(), time: nowTime(),
-            protein: Int(t.proteinG * t.grams / 100),
-            carbs: Int(t.carbG * t.grams / 100),
-            fat: Int(t.fatG * t.grams / 100),
-            fiber: 0, sugar: 0, salt: 0, tip: ""))
+            protein: protein, carbs: carbs, fat: fat,
+            fiber: fiber, sugar: 0, salt: salt, tip: tip))
         store.update(taskID) { $0.status = .logged }
         dismiss()
     }

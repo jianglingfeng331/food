@@ -31,8 +31,18 @@ struct DailyRecord: Identifiable, Codable {
     var amount: Double
     var unit: String
     var time: String
+    var date: String      // 归属日期（"M月d日"），用于贴纸页按日期查看
+    var imageData: Data?  // 食物贴纸图片（保存后回显）
+    // 营养成分与小贴士（保存后回显到贴纸详情）
+    var protein: Int = 0
+    var carbs: Int = 0
+    var fat: Int = 0
+    var fiber: Int = 0
+    var sugar: Int = 0
+    var salt: Double = 0
+    var tip: String = ""
 
-    init(id: String? = nil, type: RecordType, name: String, calories: Int = 0, amount: Double = 0, unit: String? = nil, time: String? = nil) {
+    init(id: String? = nil, type: RecordType, name: String, calories: Int = 0, amount: Double = 0, unit: String? = nil, time: String? = nil, date: String? = nil, imageData: Data? = nil, protein: Int = 0, carbs: Int = 0, fat: Int = 0, fiber: Int = 0, sugar: Int = 0, salt: Double = 0, tip: String = "") {
         self.id = id ?? UUID().uuidString
         self.type = type
         self.name = name
@@ -42,6 +52,17 @@ struct DailyRecord: Identifiable, Codable {
         self.time = time ?? {
             let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: Date())
         }()
+        self.date = date ?? {
+            let f = DateFormatter(); f.dateFormat = "M月d日"; return f.string(from: Date())
+        }()
+        self.imageData = imageData
+        self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.fiber = fiber
+        self.sugar = sugar
+        self.salt = salt
+        self.tip = tip
     }
 }
 
@@ -61,16 +82,16 @@ struct PKPersonData {
 }
 
 struct UserProfile {
-    var name: String = "小明"
+    var name: String = ""
     var avatar: String = "👦"
-    var currentWeight: Double = 72.5
-    var targetWeight: Double = 65.0
-    var height: Double = 175
-    var bmi: Double { Double(Int(currentWeight / ((height / 100) * (height / 100)) * 10)) / 10.0 }
-    var days: Int = 15
+    var currentWeight: Double = 0
+    var targetWeight: Double = 0
+    var height: Double = 0
+    var bmi: Double { height > 0 ? Double(Int(currentWeight / ((height / 100) * (height / 100)) * 10)) / 10.0 : 0 }
+    var days: Int = 0
     var weightLost: Double { max(0, (76.0 - currentWeight)) }
-    var waterGoal: Int = 2000
-    var calorieTarget: Int = 1600
+    var waterGoal: Int = 0
+    var calorieTarget: Int = 0
 }
 
 // MARK: - 全局数据存储（单例）
@@ -108,24 +129,15 @@ final class AppDataStore: ObservableObject {
 
     // 用户信息
     @Published var profile = UserProfile()
-    @Published var partnerProfile: UserProfile = {
-        var p = UserProfile()
-        p.name = "小鹿"; p.avatar = "🦌"; p.currentWeight = 63.2; p.targetWeight = 58
-        p.height = 165; p.days = 18; p.waterGoal = 1800; p.calorieTarget = 1400
-        return p
-    }()
+    @Published var partnerProfile = UserProfile()
 
-    // PK 数据
-    var pkWeeks: [PKWeekData] = [
-        PKWeekData(weekLabel: "本周", me:    PKPersonData(calorieIn: 1480, exerciseCal: 320, exerciseMin: 45, weightChange: -0.8, waterIntake: 1800, starCount: 4),
-                  partner: PKPersonData(calorieIn: 1350, exerciseCal: 280, exerciseMin: 50, weightChange: -0.6, waterIntake: 1600, starCount: 3)),
-        PKWeekData(weekLabel: "上周", me:    PKPersonData(calorieIn: 1520, exerciseCal: 290, exerciseMin: 40, weightChange: -0.4, waterIntake: 1750, starCount: 3),
-                  partner: PKPersonData(calorieIn: 1600, exerciseCal: 240, exerciseMin: 35, weightChange: -0.2, waterIntake: 1580, starCount: 2)),
-        PKWeekData(weekLabel: "上上周", me:  PKPersonData(calorieIn: 1550, exerciseCal: 260, exerciseMin: 38, weightChange: -0.5, waterIntake: 1700, starCount: 3),
-                  partner: PKPersonData(calorieIn: 1680, exerciseCal: 200, exerciseMin: 30, weightChange: +0.1, waterIntake: 1420, starCount: 2)),
-        PKWeekData(weekLabel: "三周前", me:  PKPersonData(calorieIn: 1620, exerciseCal: 220, exerciseMin: 30, weightChange: -0.3, waterIntake: 1550, starCount: 2),
-                  partner: PKPersonData(calorieIn: 1550, exerciseCal: 180, exerciseMin: 25, weightChange: -0.1, waterIntake: 1400, starCount: 1)),
-    ]
+    /// 每日热量预算（用户自行设定，持久化至 UserDefaults，默认 0）
+    @Published var calorieTarget: Int = UserDefaults.standard.integer(forKey: "fs_calorieTarget") {
+        didSet { UserDefaults.standard.set(calorieTarget, forKey: "fs_calorieTarget") }
+    }
+
+    // PK 数据（默认空；仅在登录并加载真实/演示 PK 数据后填充，游客态全为 0）
+    var pkWeeks: [PKWeekData] = []
 
     var todayPK: (meCalories: Int, partnerCalories: Int) {
         if let week = pkWeeks.first {
@@ -134,21 +146,29 @@ final class AppDataStore: ObservableObject {
         return (0, 0)
     }
 
-    // 今日记录（首次启动用 mock，之后以本地持久化为准，避免云端不可达时数据丢失）
+    // 今日记录（我方），以本地持久化为准；无持久化数据时返回空
     @Published var todayRecords: [DailyRecord] = {
         if let data = UserDefaults.standard.data(forKey: "fs_todayRecords"),
            let list = try? JSONDecoder().decode([DailyRecord].self, from: data) {
             return list
         }
-        return [
-            DailyRecord(type: .food, name: "鸡胸肉沙拉", calories: 320, amount: 200),
-            DailyRecord(type: .food, name: "全麦面包", calories: 180, amount: 100),
-            DailyRecord(type: .exercise, name: "跑步", calories: 300, amount: 30),
-            DailyRecord(type: .water, name: "白开水", calories: 0, amount: 500),
-            DailyRecord(type: .water, name: "矿泉水", calories: 0, amount: 300),
-            DailyRecord(type: .weight, name: "今日体重", calories: 0, amount: 72.5),
-        ]
+        return []
     }()
+
+    // 对方（二维码关联用户）的饮食记录，独立存储，与"我的"区分
+    @Published var partnerRecords: [DailyRecord] = {
+        if let data = UserDefaults.standard.data(forKey: "fs_partnerRecords"),
+           let list = try? JSONDecoder().decode([DailyRecord].self, from: data) {
+            return list
+        }
+        return []
+    }()
+
+    private func persistPartnerRecords() {
+        if let data = try? JSONEncoder().encode(partnerRecords) {
+            UserDefaults.standard.set(data, forKey: "fs_partnerRecords")
+        }
+    }
 
     // 我的贴纸（拍摄生成的预设）
     @Published var savedStickers: [FoodSticker] = []
@@ -171,6 +191,10 @@ final class AppDataStore: ObservableObject {
     func addRecord(_ record: DailyRecord) {
         todayRecords.append(record)
         persistRecords()
+        // 体重记录同步更新 profile.currentWeight，确保 PK 页面等依赖 profile 的地方保持一致
+        if record.type == .weight {
+            profile.currentWeight = record.amount
+        }
         Task {
             try? await CloudAPI.shared.addRecord(
                 type: record.type.rawValue, name: record.name,
@@ -190,6 +214,10 @@ final class AppDataStore: ObservableObject {
         todayRecords.removeAll { $0.type == type }
         todayRecords.append(contentsOf: records)
         persistRecords()
+        // 体重记录同步更新 profile.currentWeight
+        if type == .weight, let lastWeight = records.last?.amount {
+            profile.currentWeight = lastWeight
+        }
     }
 
     /// 加载仪表盘数据并合并至本地状态（首页 onAppear 专用）
@@ -226,13 +254,13 @@ final class AppDataStore: ObservableObject {
         do {
             let items = try await repo.fetchStickers()
             guard !items.isEmpty else {
-                // 仓库无数据时降级使用 CardMock 预设
-                return CardMock.stickers(for: .me) + CardMock.stickers(for: .him)
+                // 仓库无数据：返回空，游客态/未记录时不展示任何预设贴纸
+                return []
             }
             return items.map { $0.toFoodSticker() }
         } catch {
             print("[AppDataStore] Sticker repo fetch failed: \(error)")
-            return CardMock.stickers(for: .me) + CardMock.stickers(for: .him)
+            return []
         }
     }
 
@@ -270,6 +298,22 @@ final class AppDataStore: ObservableObject {
     /// App 启动时调用。
     /// 游客模式：不强制登录，直接以本地 mock 数据浏览；
     /// 已登录（AuthService 有用户）：尝试用 CloudAPI 同步真实数据（失败则保留本地）。
+    // MARK: - 清空所有数据
+
+    /// 将全部持久化数据与内存状态彻底清空（不会清除登录态 token）
+    @MainActor
+    func clearAllData() {
+        todayRecords = []
+        persistRecords()
+        partnerRecords = []
+        persistPartnerRecords()
+        profile = UserProfile()
+        partnerProfile = UserProfile()
+        savedStickers = []
+        pkWeeks = []
+        calorieTarget = 0
+    }
+
     @MainActor
     func bootstrap() async {
         // 根据登录态设置正确的数据仓库

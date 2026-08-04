@@ -1,0 +1,75 @@
+version: "3.8"
+# 监控栈（独立 compose，不混入业务容器）
+# 启动: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # PostgreSQL 只读副本（读写分离）
+  db-replica:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: fitfoodpk
+      POSTGRES_USER: fitfoodpk
+      POSTGRES_PASSWORD: change-me-to-strong-password
+    volumes:
+      - pgdata-replica:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    command: |
+      bash -c "
+      # 等待主库就绪后建立流复制
+      until pg_isready -h db -p 5432 -U fitfoodpk; do sleep 2; done
+      # 初始化副本（如首次）
+      if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+        pg_basebackup -h db -D /var/lib/postgresql/data -U fitfoodpk -P -R
+      fi
+      # 启动副本
+      pg_ctl -D /var/lib/postgresql/data start
+      tail -f /dev/null
+      "
+
+  prometheus:
+    image: prom/prometheus:v2.52
+    restart: always
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - promdata:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+
+  grafana:
+    image: grafana/grafana:11.0
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafdata:/var/lib/grafana
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/fitfoodpk.json:ro
+
+volumes:
+  redisdata:
+  pgdata-replica:
+  promdata:
+  grafdata:

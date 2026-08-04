@@ -48,7 +48,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false   # 云端必须 HTTPS，禁止明文
         UIBackgroundModes: []             # 不需要后台能力
-        CFBundleDisplayName: "食物贴纸"
+        CFBundleDisplayName: "FitFood PK"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.foodsticker
@@ -61,7 +61,6 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "15.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        # 模型权重（.mlpackage）、营养库（nutrition.db）、标签（labels_1000.txt）
-        # 由 tools/ 脚本产出后拖入 FoodSticker/Resources/ 并重新 xcodegen generate。
-        # 这里声明拷贝进 Bundle，避免漏打包。
+        # 资源：营养库（nutrition.db），可选端侧抠图模型 MobileSAMEncoder/Decoder.mlpackage（占位中）。
+        # 主流程 AI 均走云端，详见 README 架构说明。
         COPY_PHASE_STRIP: false

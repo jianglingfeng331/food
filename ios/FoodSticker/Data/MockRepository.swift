@@ -2,46 +2,43 @@ import UIKit
 
 // MARK: - 模拟 Dashboard 仓库
 
-/// 返回与当前 HomeView 中硬编码数据完全一致的 mock 结构，
-/// 确保切换到 Repository 模式后 UI 表现无差异。
+/// 返回与当前 HomeView 结构一致的 mock 数据，但昵称跟随 AppDataStore 的真实资料，
+/// 避免首页/贴纸页出现硬编码的「小鹿/小宇」。
 final class MockDashboardRepository: DashboardRepository {
-
-    /// 模拟昵称（与 HomeView.nickname = "小鹿" 一致）
-    static let mockNickname = "小鹿"
-    /// 模拟对手昵称（与 HomeView.user2.name = "小宇" 一致）
-    static let rivalNickname = "小宇"
 
     func fetchDashboard() async throws -> DashboardData {
         // 模拟 200ms 网络延迟，让 UI 感知数据加载过程
         try? await Task.sleep(nanoseconds: 200_000_000)
 
+        let store = AppDataStore.shared
+        let myName = store.profile.name.isEmpty ? nil : store.profile.name
+        let rivalName = store.partnerProfile.name.isEmpty ? nil : store.partnerProfile.name
+
+        // 已清零所有假数据，用户无真实记录时全部为 0/nil，方便测试
         return DashboardData(
-            // 本人
-            myNickname: Self.mockNickname,
-            myAvatarURL: nil,                     // 演示阶段无远端头像，使用本地 AvatarStore
+            myNickname: myName,
+            myAvatarURL: nil,
 
-            // 对手
-            opponentNickname: Self.rivalNickname,
+            opponentNickname: rivalName,
             opponentAvatarURL: nil,
-            opponentScore: 1080,
-            opponentIsLeader: true,
+            opponentScore: nil,
+            opponentIsLeader: false,
 
-            // PK 概要
-            hasOpponent: true,
-            myScore: 1420,
-            myWins: 2,
-            opponentWins: 2,
+            // PK 概要：无对手时全空
+            hasOpponent: false,
+            myScore: nil,
+            myWins: nil,
+            opponentWins: nil,
 
-            // 今日数据（对齐 HomeView：intake=1450, target=1500, exerciseCal=256,
-            // water=1050, weight=nil, weightMeta="点击加号记录 · 上次 08:15"）
-            todayCalorieIntake: 1450,
-            todayCalorieGoal: 1500,
-            todayExerciseCalories: 256,
-            todayExerciseMinutes: nil,             // 首页不展示此字段
-            todayWaterML: 1050,
-            waterGoalML: 2000,                     // 对齐 AppDataStore.waterGoal
+            // 今日数据全清零，仅当用户真有本地记录时才会被 store 数据覆盖
+            todayCalorieIntake: nil,
+            todayCalorieGoal: 0,
+            todayExerciseCalories: nil,
+            todayExerciseMinutes: nil,
+            todayWaterML: nil,
+            waterGoalML: 0,
             latestWeight: nil,
-            lastWeightTime: "08:15"
+            lastWeightTime: nil
         )
     }
 }
@@ -63,11 +60,11 @@ final class GuestDashboardRepository: DashboardRepository {
             myWins: nil,
             opponentWins: nil,
             todayCalorieIntake: nil,
-            todayCalorieGoal: 1500,               // 默认目标
+            todayCalorieGoal: 0,                 // 游客态目标也清零，UI 显示 0
             todayExerciseCalories: nil,
             todayExerciseMinutes: nil,
             todayWaterML: nil,
-            waterGoalML: 2000,
+            waterGoalML: 0,
             latestWeight: nil,
             lastWeightTime: nil
         )
@@ -77,34 +74,8 @@ final class GuestDashboardRepository: DashboardRepository {
 // MARK: - 模拟 Sticker 仓库
 
 final class MockStickerRepository: StickerRepository {
-    /// 模拟预设贴纸（沿用 CardMock.stickers 逻辑 + AppDataStore.savedStickers）
-    private var items: [StickerItem]
-
-    init() {
-        self.items = MockStickerRepository.buildMockItems()
-    }
-
-    private static func buildMockItems() -> [StickerItem] {
-        // 从 CardMock 内建贴纸映射为 StickerItem，确保仓库有数据可用
-        let source = CardMock.stickers(for: .me) + CardMock.stickers(for: .him)
-        return source.enumerated().map { i, s in
-            StickerItem(
-                id: "mock-preset-\(i)",
-                name: s.name,
-                imageURL: nil,
-                imageData: s.uiImage?.pngData(),
-                thumbnailData: nil,
-                kcalPer100g: Double(s.cal),
-                proteinG: Double(s.protein),
-                carbG: Double(s.carbs),
-                fatG: Double(s.fat),
-                typicalPortionG: 100,
-                useCount: 0,
-                isPreset: true,
-                createdAt: Date()
-            )
-        }
-    }
+    /// 默认无任何预设贴纸（游客态数据全为 0）；上传后才有数据
+    private var items: [StickerItem] = []
 
     func fetchStickers() async throws -> [StickerItem] {
         try? await Task.sleep(nanoseconds: 150_000_000)
@@ -125,11 +96,15 @@ final class MockStickerRepository: StickerRepository {
             proteinG: nutrition.proteinG,
             carbG: nutrition.carbG,
             fatG: nutrition.fatG,
+            dietaryFiberG: nutrition.dietaryFiberG,
+            sodiumMg: nutrition.sodiumMg,
+            vitaminTips: nutrition.vitaminTips,
             typicalPortionG: nutrition.typicalPortionG,
             useCount: 0,
             isPreset: false,
             createdAt: Date()
         )
+        items.removeAll { $0.name == name }
         items.insert(item, at: 0)
         return item
     }
@@ -148,6 +123,9 @@ final class MockStickerRepository: StickerRepository {
             proteinG: nutrition?.proteinG ?? old.proteinG,
             carbG: nutrition?.carbG ?? old.carbG,
             fatG: nutrition?.fatG ?? old.fatG,
+            dietaryFiberG: nutrition?.dietaryFiberG ?? old.dietaryFiberG,
+            sodiumMg: nutrition?.sodiumMg ?? old.sodiumMg,
+            vitaminTips: nutrition?.vitaminTips ?? old.vitaminTips,
             typicalPortionG: nutrition?.typicalPortionG ?? old.typicalPortionG,
             useCount: old.useCount, isPreset: old.isPreset, createdAt: old.createdAt
         )
@@ -168,6 +146,9 @@ final class MockStickerRepository: StickerRepository {
             imageData: old.imageData, thumbnailData: old.thumbnailData,
             kcalPer100g: old.kcalPer100g, proteinG: old.proteinG,
             carbG: old.carbG, fatG: old.fatG,
+            dietaryFiberG: old.dietaryFiberG,
+            sodiumMg: old.sodiumMg,
+            vitaminTips: old.vitaminTips,
             typicalPortionG: old.typicalPortionG,
             useCount: old.useCount + 1, isPreset: old.isPreset, createdAt: old.createdAt
         )
@@ -190,11 +171,8 @@ final class MockPKRepository: PKRepository {
 
     func getBindStatus() async throws -> PKBindStatus {
         try? await Task.sleep(nanoseconds: 100_000_000)
-        return PKBindStatus(state: .bound(opponent: PKOpponentInfo(
-            uid: "mock-rival-uid",
-            nickname: MockDashboardRepository.rivalNickname,
-            avatarURL: nil
-        )))
+        // 已清零：无对手绑定状态，方便测试
+        return PKBindStatus(state: .unbound)
     }
 
     func unbind() async throws {
@@ -216,69 +194,63 @@ final class MockPKRepository: PKRepository {
     // MARK: 数据构造
 
     private static func buildMockWeeklyData() -> PKWeeklyData {
+        let store = AppDataStore.shared
+        let myName = store.profile.name.isEmpty ? "我" : store.profile.name
+        let rivalName = store.partnerProfile.name.isEmpty ? "对手" : store.partnerProfile.name
+
+        // 已清零：所有周数据为 0，方便测试
+        let zeroIntake   = [0, 0, 0, 0, 0, 0, 0]
+        let zeroBurned   = [0, 0, 0, 0, 0, 0, 0]
+        let zeroExMin    = [0, 0, 0, 0, 0, 0, 0]
+        let zeroWeights  = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        let zeroWater    = [0, 0, 0, 0, 0, 0, 0]
+
         let me = PKWeeklyData.Person(
-            nickname: MockDashboardRepository.mockNickname,
+            nickname: myName,
             avatarURL: nil,
-            dailyIntake: [1450, 1520, 1380, 1600, 1490, 1700, 1400],
-            dailyBurned: [320, 280, 410, 350, 300, 460, 380],
-            exerciseMinutes: [45, 38, 55, 47, 40, 65, 52],
-            weights: [58.2, 58.0, 57.7, 57.9, 57.5, 57.3, 57.1],
-            waterML: [1300, 1500, 1600, 1400, 1500, 1700, 1500],
-            waterGoalML: 2000
+            dailyIntake: zeroIntake,
+            dailyBurned: zeroBurned,
+            exerciseMinutes: zeroExMin,
+            weights: zeroWeights,
+            waterML: zeroWater,
+            waterGoalML: 0
         )
 
         let opponent = PKWeeklyData.Person(
-            nickname: MockDashboardRepository.rivalNickname,
+            nickname: rivalName,
             avatarURL: nil,
-            dailyIntake: [1280, 1350, 1420, 1300, 1450, 1250, 1380],
-            dailyBurned: [260, 300, 240, 350, 280, 320, 290],
-            exerciseMinutes: [35, 42, 33, 50, 40, 45, 39],
-            weights: [55.6, 55.4, 55.5, 55.2, 55.0, 54.9, 54.7],
-            waterML: [1100, 1300, 1400, 1200, 1300, 1450, 1300],
-            waterGoalML: 1800
+            dailyIntake: zeroIntake,
+            dailyBurned: zeroBurned,
+            exerciseMinutes: zeroExMin,
+            weights: zeroWeights,
+            waterML: zeroWater,
+            waterGoalML: 0
         )
 
-        // 四个维度指标，与 PKMock.metrics 对齐
-        let metrics: [PKWeeklyData.Metric] = {
-            func avg(_ a: [Int]) -> Double { Double(a.reduce(0, +)) / Double(a.count) }
-            func sum(_ a: [Int]) -> Double { Double(a.reduce(0, +)) }
-
-            let meAvgIntake = avg(me.dailyIntake)    // ≈ 1506
-            let opAvgIntake = avg(opponent.dailyIntake) // ≈ 1349
-            let meTotalBurn = sum(me.dailyBurned)     // 2500
-            let opTotalBurn = sum(opponent.dailyBurned) // 2040
-            let meWeightLoss = ((me.weights[0] - me.weights[6]) * 10).rounded() / 10  // 1.1
-            let opWeightLoss = ((opponent.weights[0] - opponent.weights[6]) * 10).rounded() / 10 // 0.9
-            let meWaterPct = (Double(me.waterML.filter { $0 >= me.waterGoalML }.count) / 7 * 100).rounded() // 0
-            let opWaterPct = (Double(opponent.waterML.filter { $0 >= opponent.waterGoalML }.count) / 7 * 100).rounded() // 0
-
-            return [
-                PKWeeklyData.Metric(label: "平均每日摄入",
-                                     myValue: meAvgIntake, opponentValue: opAvgIntake,
-                                     myWins: false, desc: "平均摄入越低越好"),
-                PKWeeklyData.Metric(label: "总运动消耗",
-                                     myValue: meTotalBurn, opponentValue: opTotalBurn,
-                                     myWins: true, desc: "总消耗越高越好"),
-                PKWeeklyData.Metric(label: "本周减重",
-                                     myValue: meWeightLoss, opponentValue: opWeightLoss,
-                                     myWins: true, desc: "本周减重越多越好"),
-                PKWeeklyData.Metric(label: "饮水达标率",
-                                     myValue: meWaterPct, opponentValue: opWaterPct,
-                                     myWins: false, desc: "达标天数比例"),
-            ]
-        }()
-
-        let meWins = metrics.filter { $0.myWins }.count  // 2
-        let opWins  = metrics.count - meWins             // 2
+        // 指标全部归零，无输赢
+        let metrics: [PKWeeklyData.Metric] = [
+            PKWeeklyData.Metric(label: "平均每日摄入",
+                                 myValue: 0, opponentValue: 0,
+                                 myWins: false, desc: "平均摄入越低越好"),
+            PKWeeklyData.Metric(label: "总运动消耗",
+                                 myValue: 0, opponentValue: 0,
+                                 myWins: false, desc: "总消耗越高越好"),
+            PKWeeklyData.Metric(label: "本周减重",
+                                 myValue: 0, opponentValue: 0,
+                                 myWins: false, desc: "本周减重越多越好"),
+            PKWeeklyData.Metric(label: "饮水达标率",
+                                 myValue: 0, opponentValue: 0,
+                                 myWins: false, desc: "达标天数比例"),
+        ]
 
         return PKWeeklyData(
             weekLabel: "本周          ",
             me: me,
             opponent: opponent,
             metrics: metrics,
-            meWinsTotal: meWins,
-            opponentWinsTotal: opWins,
-            leaderIsMe: meWins >= opWins
+            meWinsTotal: 0,
+            opponentWinsTotal: 0,
+            leaderIsMe: false
         )
     }
 }

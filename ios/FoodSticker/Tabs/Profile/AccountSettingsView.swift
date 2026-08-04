@@ -10,6 +10,7 @@ import SwiftUI
 struct AccountSettingsView: View {
     @StateObject private var store = ProfileStore.shared
     @ObservedObject private var avatarStore = AvatarStore.shared
+    @ObservedObject private var appStore = AppDataStore.shared
     @Environment(\.dismiss) private var dismiss
 
     /// 点击"登录以同步账号"时触发（由 ProfileViewController 注入）
@@ -17,20 +18,28 @@ struct AccountSettingsView: View {
     /// 点击"昵称"进入编辑页（由 ProfileViewController 注入，push NicknameEditView）
     var onEditNickname: (() -> Void)? = nil
 
+    var onUpdateCalorieTarget: ((Int) -> Void)? = nil
+
     @State private var showPicker: ImagePickerSource? = nil
     @State private var showLogout = false
-    @State private var nickname: String
+    @State private var showCalorieEditor = false
 
     private var isGuest: Bool { AuthService.shared.currentUser == nil }
+    /// 昵称显示：直接从 avatarStore 读取，修改后自动刷新
     private var displayName: String {
-        let n = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        return n.isEmpty ? "小鹿" : n
+        let n = avatarStore.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? "我" : n
     }
+    /// 热量预算：直接从 appStore 读取，修改后自动刷新
+    private var calorieTarget: Int { appStore.calorieTarget }
 
-    init(onLogin: (() -> Void)? = nil, onEditNickname: (() -> Void)? = nil) {
+    init(onLogin: (() -> Void)? = nil,
+         onEditNickname: (() -> Void)? = nil,
+         calorieTarget: Int = 0,
+         onUpdateCalorieTarget: ((Int) -> Void)? = nil) {
         self.onLogin = onLogin
         self.onEditNickname = onEditNickname
-        _nickname = State(initialValue: AuthService.shared.currentUser?.nickname ?? AvatarStore.shared.nickname)
+        self.onUpdateCalorieTarget = onUpdateCalorieTarget
     }
 
     var body: some View {
@@ -66,6 +75,27 @@ struct AccountSettingsView: View {
                             .foregroundColor(CardTokens.Color.foreground)
                         Spacer()
                         Text(displayName)
+                            .font(.app(size: 16, weight: .semibold))
+                            .foregroundColor(CardTokens.Color.foreground)
+                        ChevronRightIcon()
+                            .stroke(CardTokens.Color.foregroundSubtle, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                            .frame(width: 18, height: 18)
+                            .padding(.leading, 4)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 52)
+                    .profileCard()
+                }
+                .buttonStyle(.plain)
+
+                // 每日热量预算
+                Button(action: { showCalorieEditor = true }) {
+                    HStack {
+                        Text("每日热量预算")
+                            .font(.app(size: 15))
+                            .foregroundColor(CardTokens.Color.foreground)
+                        Spacer()
+                        Text("\(calorieTarget) kcal")
                             .font(.app(size: 16, weight: .semibold))
                             .foregroundColor(CardTokens.Color.foreground)
                         ChevronRightIcon()
@@ -146,12 +176,17 @@ struct AccountSettingsView: View {
                 avatarStore.saveAvatar(image)
             }
         }
+        .sheet(isPresented: $showCalorieEditor) {
+            CalorieTargetEditView(current: calorieTarget) { newTarget in
+                onUpdateCalorieTarget?(newTarget)
+            }
+        }
         .alert("退出登录", isPresented: $showLogout) {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) {
-                AuthService.shared.logout()
+                avatarStore.reset()
                 Task { await AppDataStore.shared.bootstrap() }
-                NotificationCenter.default.post(name: .authDidChange, object: nil)
+                AuthService.shared.logout()
                 dismiss()
             }
         } message: {
@@ -198,7 +233,68 @@ struct AccountSettingsView: View {
     }
 }
 
-// MARK: - 昵称编辑页
+// MARK: - 每日热量预算编辑页
+
+struct CalorieTargetEditView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
+
+    private let current: Int
+    private let onSave: (Int) -> Void
+
+    init(current: Int, onSave: @escaping (Int) -> Void) {
+        self.current = current
+        self.onSave = onSave
+        _text = State(initialValue: current > 0 ? "\(current)" : "")
+    }
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("每日热量预算（kcal）")
+                        .font(.app(size: 13))
+                        .foregroundColor(CardTokens.Color.foregroundSubtle)
+
+                    TextField("例如 1500", text: $text)
+                        .keyboardType(.numberPad)
+                        .font(.app(size: 28, weight: .bold))
+                        .foregroundColor(CardTokens.Color.foreground)
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.black.opacity(0.04)))
+
+                    Text("设定后，首页热量概览将以该值为预算基准")
+                        .font(.app(size: 12))
+                        .foregroundColor(CardTokens.Color.foregroundSubtle)
+                }
+                .padding(20)
+            }
+            .background(CardTokens.Color.background.ignoresSafeArea())
+            .navigationTitle("每日热量预算")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { dismiss() }
+                        .font(.app(size: 15))
+                        .foregroundColor(CardTokens.Color.foregroundMuted)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("保存") { save(); dismiss() }
+                        .font(.app(size: 15, weight: .semibold))
+                        .foregroundColor(CardTokens.Color.primary)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = Int(trimmed) ?? 0
+        onSave(max(0, min(value, 9999)))
+    }
+}
+
+
 
 struct NicknameEditView: View {
     @Environment(\.dismiss) private var dismiss
@@ -241,7 +337,7 @@ struct NicknameEditView: View {
 
     private func save() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(trimmed.isEmpty ? "小鹿" : String(trimmed.prefix(20)))
+        onSave(trimmed.isEmpty ? "我" : String(trimmed.prefix(20)))
         dismiss()
     }
 }

@@ -47,6 +47,15 @@ __pycache__/
 venv/
 env/
 
+# ===== 密钥文件（禁止提交） =====
+.env
+server/.env
+
+# ===== 数据文件（禁止提交） =====
+server/stickers/
+server/foodsticker.db
+*.db
+
 # ===== Editor =====
 .vscode/
 .idea/

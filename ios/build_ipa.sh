@@ -7,8 +7,17 @@ ARCHIVE_PATH="/tmp/FoodStickerApp.xcarchive"
 EXPORT_DIR="$HOME/Desktop/FoodSticker-IPA"
 EXPORT_PLIST="/tmp/export_options.plist"
 
+# -------- 配置 --------
+# Team ID：可通过环境变量 TEAM_ID 传入，否则用默认值
+TEAM_ID="${TEAM_ID:-}"
+# 导出方式：app-store（上架）/ development（内测）/ ad-hoc（企业分发）
+EXPORT_METHOD="${EXPORT_METHOD:-app-store}"
+# ---------------------
+
 echo "=============================="
-echo "  食物贴纸 IPA 打包脚本"
+echo "  FitFood PK IPA 打包脚本"
+echo "  Team ID: ${TEAM_ID:-自动}"
+echo "  Export:  $EXPORT_METHOD"
 echo "=============================="
 
 # Step 1: Clean
@@ -39,9 +48,9 @@ cat > "$EXPORT_PLIST" <<EOF
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>development</string>
+    <string>$EXPORT_METHOD</string>
     <key>teamID</key>
-    <string>3SFJ8UL946</string>
+    <string>$TEAM_ID</string>
     <key>signingStyle</key>
     <string>automatic</string>
 </dict>

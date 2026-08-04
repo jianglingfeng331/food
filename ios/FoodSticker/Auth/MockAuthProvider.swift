@@ -62,7 +62,7 @@ final class MockAuthProvider: AuthProvider {
             throw AuthError.codeExpired
         }
         // 登录成功即视为该号存在（验证码登录可免注册）
-        var acc = accounts[phone] ?? MockAccount(phone: phone,
+        let acc = accounts[phone] ?? MockAccount(phone: phone,
                                                  password: nil,
                                                  nickname: defaultNickname(phone),
                                                  avatar: randomAvatar())

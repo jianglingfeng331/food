@@ -6,6 +6,7 @@ struct TopBarView: View {
     let nickname: String
     var onProfileTap: (() -> Void)?
 
+    @ObservedObject private var avatarStore = AvatarStore.shared
     @State private var greeting: String = ""
 
     var body: some View {
@@ -35,7 +36,7 @@ struct TopBarView: View {
 
             // 右侧：个人中心入口（用户头像，未设置时用默认头像）
             Button(action: { onProfileTap?() }) {
-                AvatarView(AvatarStore.shared.avatarImage, size: 40)
+                AvatarView(avatarStore.avatarImage, size: 40)
             }
             .buttonStyle(.plain)
         }

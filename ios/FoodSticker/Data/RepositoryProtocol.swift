@@ -45,6 +45,9 @@ struct StickerItem: Identifiable, Sendable {
     let proteinG: Double
     let carbG: Double
     let fatG: Double
+    let dietaryFiberG: Double
+    let sodiumMg: Double
+    let vitaminTips: String
     let typicalPortionG: Double
     let useCount: Int
     let isPreset: Bool
@@ -139,6 +142,9 @@ struct StickerNutrition: Sendable {
     let carbG: Double
     let fatG: Double
     let typicalPortionG: Double
+    let dietaryFiberG: Double
+    let sodiumMg: Double
+    let vitaminTips: String
 }
 
 /// PK 数据仓库
@@ -179,10 +185,10 @@ extension StickerItem {
             protein: Int(proteinG * ratio),
             carbs: Int(carbG * ratio),
             fat: Int(fatG * ratio),
-            fiber: 0,
+            fiber: Int(dietaryFiberG * ratio),
             sugar: 0,
-            salt: 0,
-            tip: ""
+            salt: sodiumMg / 1000,
+            tip: vitaminTips
         )
     }
 }
@@ -192,10 +198,13 @@ extension FoodSticker {
     func toStickerNutrition() -> StickerNutrition {
         StickerNutrition(
             kcalPer100g: Double(max(cal, 1)),
-            proteinG: Double(protein ?? 0),
-            carbG: Double(carbs ?? 0),
-            fatG: Double(fat ?? 0),
-            typicalPortionG: 100
+            proteinG: Double(protein),
+            carbG: Double(carbs),
+            fatG: Double(fat),
+            typicalPortionG: 100,
+            dietaryFiberG: Double(fiber),
+            sodiumMg: salt * 1000,
+            vitaminTips: tip
         )
     }
 }

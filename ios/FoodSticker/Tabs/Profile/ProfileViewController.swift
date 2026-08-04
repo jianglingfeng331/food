@@ -51,18 +51,24 @@ final class ProfileViewController: UIViewController {
         case .goal:      pushSwiftUI(GoalView(), title: "减脂目标")
         case .trend:     pushSwiftUI(WeightTrendView(), title: "体重趋势")
         case .reminder:  pushSwiftUI(ReminderView(), title: "提醒设置")
-        case .account:   pushSwiftUI(AccountSettingsView(
-                            onLogin: { [weak self] in self?.loginTapped() },
-                            onEditNickname: { [weak self] in
-                                let editor = NicknameEditView(initial: AvatarStore.shared.nickname) { newName in
-                                    AvatarStore.shared.saveNickname(newName)
-                                    if var u = AuthService.shared.currentUser {
-                                        u.nickname = newName
-                                        AuthService.shared.updateCurrentUser(u)
-                                    }
-                                }
-                                self?.pushSwiftUI(editor, title: "编辑昵称")
-                            }), title: "账户设置")
+        case .account:
+            let accountView = AccountSettingsView(
+                onLogin: { [weak self] in self?.loginTapped() },
+                onEditNickname: { [weak self] in
+                    let editor = NicknameEditView(initial: AvatarStore.shared.nickname) { newName in
+                        AvatarStore.shared.saveNickname(newName)
+                        if var u = AuthService.shared.currentUser {
+                            u.nickname = newName
+                            AuthService.shared.updateCurrentUser(u)
+                        }
+                    }
+                    self?.pushSwiftUI(editor, title: "编辑昵称")
+                },
+                calorieTarget: AppDataStore.shared.calorieTarget,
+                onUpdateCalorieTarget: { newTarget in
+                    AppDataStore.shared.calorieTarget = newTarget
+                })
+            pushSwiftUI(accountView, title: "账户设置")
         }
     }
 

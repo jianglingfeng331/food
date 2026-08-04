@@ -4,7 +4,7 @@ import SwiftUI
 
 struct PKUserInfo {
     let name: String
-    let avatar: String      // 本地图片名 或 URL
+    let avatar: UIImage?    // 已上传头像；为 nil 时显示默认未上传占位图
     let score: Int
     let progress: Double    // 0...100
     let isSelf: Bool
@@ -16,6 +16,7 @@ struct PKUserInfo {
 struct PKCardView: View {
     let user1: PKUserInfo
     let user2: PKUserInfo
+    let hasOpponent: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,11 +24,15 @@ struct PKCardView: View {
             pkHeader
                 .padding(.bottom, HomeTokens.Spacing.cardGap12)
 
-            // 双人对战区
-            HStack(spacing: 0) {
-                userColumn(user1, isLeft: true)
-                pkDivider
-                userColumn(user2, isLeft: false)
+            // 双人对战区(有对手) / 单人展示(无对手)
+            if hasOpponent {
+                HStack(spacing: 0) {
+                    userColumn(user1, isLeft: true)
+                    pkDivider
+                    userColumn(user2, isLeft: false)
+                }
+            } else {
+                singleUserView
             }
         }
         .padding(.vertical, HomeTokens.Spacing.cardPaddingV)
@@ -36,29 +41,58 @@ struct PKCardView: View {
         .padding(.bottom, HomeTokens.Spacing.cardGap12)
     }
 
+    // MARK: - 无对手时的单人展示
+
+    private var singleUserView: some View {
+        HStack(spacing: 12) {
+            avatarView(user: user1)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(user1.name)
+                    .font(.app(size: HomeTokens.FontSize.footnote,
+                                  weight: HomeTokens.FontWeight.medium))
+                    .foregroundColor(HomeTokens.Color.foregroundMuted)
+
+                (Text("\(user1.score)")
+                    .font(.app(size: HomeTokens.FontSize.body, weight: .bold))
+                    .foregroundColor(HomeTokens.Color.foreground)
+                + Text(" kcal")
+                    .font(.app(size: HomeTokens.FontSize.caption2))
+                    .foregroundColor(HomeTokens.Color.foregroundSubtle)
+                )
+
+                ProgressBarView(
+                    progress: user1.progress,
+                    height: HomeTokens.ProgressHeight.pk,
+                    cornerRadius: HomeTokens.Radius.progressBar6,
+                    gradient: ProgressGradient.primary
+                )
+            }
+
+            Spacer()
+        }
+    }
+
     // MARK: - 标题行
 
     private var pkHeader: some View {
         HStack {
             HStack(spacing: 8) {
-                Image(systemName: "trophy.fill")
+                Image(systemName: hasOpponent ? "trophy.fill" : "flame.fill")
                     .font(.app(size: HomeTokens.Size.smallIcon))
                     .foregroundColor(HomeTokens.Color.primary)
 
-                Text("今日PK")
+                Text(hasOpponent ? "今日PK" : "今日摄入")
                     .font(.app(size: HomeTokens.FontSize.body,
                                   weight: HomeTokens.FontWeight.semibold))
                     .foregroundColor(HomeTokens.Color.foreground)
 
-                VSbadge
+                if hasOpponent {
+                    VSbadge
+                }
             }
 
             Spacer()
-
-            Text("剩 6h · 已打卡")
-                .font(.app(size: HomeTokens.FontSize.caption1,
-                              weight: HomeTokens.FontWeight.medium))
-                .foregroundColor(HomeTokens.Color.foregroundSubtle)
         }
     }
 
@@ -121,17 +155,7 @@ struct PKCardView: View {
 
     private func avatarView(user: PKUserInfo) -> some View {
         ZStack(alignment: .topTrailing) {
-            Image(user.avatar)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: HomeTokens.Size.avatar, height: HomeTokens.Size.avatar)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(SwiftUI.Color.white.opacity(0.4), lineWidth: 1)
-                )
-                .shadow(color: SwiftUI.Color.black.opacity(0.05),
-                        radius: 1, y: 1)
+            AvatarView(user.avatar, size: HomeTokens.Size.avatar)
 
             // 对方领先显示皇冠
             if !user.isSelf && user.isLeader {

@@ -33,9 +33,10 @@ final class ProfileStore: ObservableObject {
     // MARK: 初始化（含 Mock 种子数据）
 
     private init() {
-        let seedHeight: Double = 168
-        let seedCurrent: Double = 70.2
-        let seedTarget: Double = 62.0
+        // 新用户注册后默认为 0，需手动进入减脂目标页设置
+        let seedHeight: Double = 0
+        let seedCurrent: Double = 0
+        let seedTarget: Double = 0
 
         heightCm        = defaults.load("profile_height", default: seedHeight)
         currentWeight   = defaults.load("profile_currentWeight", default: seedCurrent)
@@ -149,13 +150,13 @@ final class ProfileStore: ObservableObject {
 // MARK: - 模型
 
 struct WeightPoint: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let date: Date
     let weight: Double
 }
 
 struct WorkoutItem: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let weekday: String
     let title: String
     let detail: String

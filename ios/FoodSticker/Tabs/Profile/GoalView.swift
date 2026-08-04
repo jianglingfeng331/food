@@ -17,54 +17,77 @@ struct GoalView: View {
         var id: Int { hashValue }
     }
 
+    /// 是否已完成初始设置（身高>0 且 当前体重>0）
+    private var isSetup: Bool { store.heightCm > 0 && store.currentWeight > 0 }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                // BMI 概览
-                VStack(spacing: 8) {
-                    Text(String(format: "BMI %.1f", store.bmi))
-                        .font(.app(size: 34, weight: .bold))
-                        .foregroundColor(CardTokens.Color.foreground)
-                    Text("当前分类：\(store.bmiCategory)")
-                        .font(.app(size: 14))
-                        .foregroundColor(CardTokens.Color.foregroundMuted)
-                    bmiBar
+                if isSetup {
+                    // BMI 概览
+                    VStack(spacing: 8) {
+                        Text(String(format: "BMI %.1f", store.bmi))
+                            .font(.app(size: 34, weight: .bold))
+                            .foregroundColor(CardTokens.Color.foreground)
+                        Text("当前分类：\(store.bmiCategory)")
+                            .font(.app(size: 14))
+                            .foregroundColor(CardTokens.Color.foregroundMuted)
+                        bmiBar
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .profileCard()
+                } else {
+                    // 未设置状态提示
+                    VStack(spacing: 10) {
+                        Image(systemName: "figure.stand")
+                            .font(.system(size: 32))
+                            .foregroundColor(CardTokens.Color.foregroundSubtle)
+                        Text("尚未设置身体数据")
+                            .font(.app(size: 16, weight: .medium))
+                            .foregroundColor(CardTokens.Color.foreground)
+                        Text("请点击下方设置身高、体重及目标")
+                            .font(.app(size: 13))
+                            .foregroundColor(CardTokens.Color.foregroundMuted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 28)
+                    .profileCard()
                 }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .profileCard()
 
                 // 目标录入（点击进入滚轮选择）
                 VStack(spacing: 0) {
-                    valueRow(title: "身高", display: String(format: "%.0f", store.heightCm), unit: "cm") {
+                    valueRow(title: "身高", display: store.heightCm > 0 ? String(format: "%.0f", store.heightCm) : "未设置", unit: "cm") {
                         editField = .height
                     }
                     divider
-                    valueRow(title: "当前体重", display: String(format: "%.1f", store.currentWeight), unit: "kg") {
+                    valueRow(title: "当前体重", display: store.currentWeight > 0 ? String(format: "%.1f", store.currentWeight) : "未设置", unit: "kg") {
                         editField = .current
                     }
                     divider
-                    valueRow(title: "目标体重", display: String(format: "%.1f", store.targetWeight), unit: "kg") {
+                    valueRow(title: "目标体重", display: store.targetWeight > 0 ? String(format: "%.1f", store.targetWeight) : "未设置", unit: "kg") {
                         editField = .target
                     }
                 }
                 .profileCard()
 
-                // 进度预测
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        metric(title: "已减", value: String(format: "%.1f", store.weightLost), unit: "kg")
-                        Spacer()
-                        metric(title: "距目标", value: String(format: "%.1f", store.remainingToTarget), unit: "kg")
+                if isSetup {
+                    // 进度预测
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            metric(title: "已减", value: String(format: "%.1f", store.weightLost), unit: "kg")
+                            Spacer()
+                            metric(title: "距目标", value: String(format: "%.1f", store.remainingToTarget), unit: "kg")
+                        }
+                        let total = max(0.1, (store.weightLost + store.remainingToTarget))
+                        progressBar(ratio: store.weightLost / total)
+                        Text("完成度 \(Int((store.weightLost / total) * 100))%")
+                            .font(.app(size: 12))
+                            .foregroundColor(CardTokens.Color.foregroundSubtle)
                     }
-                    let total = max(0.1, (store.weightLost + store.remainingToTarget))
-                    progressBar(ratio: store.weightLost / total)
-                    Text("完成度 \(Int((store.weightLost / total) * 100))%")
-                        .font(.app(size: 12))
-                        .foregroundColor(CardTokens.Color.foregroundSubtle)
+                    .padding(16)
+                    .profileCard()
                 }
-                .padding(16)
-                .profileCard()
             }
             .padding(20)
         }
@@ -74,6 +97,8 @@ struct GoalView: View {
         .sheet(item: $editField) { field in
             GoalValueSheet(field: field)
                 .environmentObject(store)
+                .interactiveDismissDisabled()
+                .presentationDetents([.height(340)])
         }
     }
 
@@ -106,7 +131,7 @@ struct GoalView: View {
                 Spacer()
                 Text(display)
                     .font(.app(size: 16, weight: .semibold))
-                    .foregroundColor(CardTokens.Color.foreground)
+                    .foregroundColor(display == "未设置" ? CardTokens.Color.foregroundSubtle : CardTokens.Color.foreground)
                 Text(unit).font(.app(size: 13)).foregroundColor(CardTokens.Color.foregroundSubtle)
                 ChevronRightIcon()
                     .stroke(CardTokens.Color.foregroundSubtle, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -115,6 +140,7 @@ struct GoalView: View {
             }
             .padding(.vertical, 14)
             .padding(.horizontal, 16)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

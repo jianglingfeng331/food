@@ -43,11 +43,23 @@ final class AvatarStore: ObservableObject {
         }
     }
 
-    /// 保存昵称
+    /// 保存昵称（同步更新全站数据源：AvatarStore / AppDataStore）
     func saveNickname(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         nickname = trimmed.isEmpty ? "未登录" : trimmed
         UserDefaults.standard.set(nickname, forKey: nickKey)
+        // 同步到 AppDataStore，保证首页/Card/PK页实时联动
+        AppDataStore.shared.profile.name = nickname
+    }
+
+    // MARK: - 重置（退出登录时调用）
+
+    /// 退出登录时重置头像与昵称到初始状态（不写 UserDefaults，仅清内存）
+    func reset() {
+        avatarImage = nil
+        UserDefaults.standard.removeObject(forKey: imageKey)
+        nickname = "未登录"
+        UserDefaults.standard.removeObject(forKey: nickKey)
     }
 
     // MARK: - 工具

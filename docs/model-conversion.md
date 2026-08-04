@@ -1,5 +1,7 @@
 # 模型转换 / 微调 / 端侧部署全流程
 
+> ⚠️ **本文档已过时**：项目已移除端侧卡通化（AnimeGAN）、端侧分类（EfficientNet）以及 Android NCNN 三模型流水线，相关 `tools/` 脚本（`convert_mobilesam.py`、`finetune_animegan.py`、`convert_efficientnet.py`、`generate_placeholder_models.py`）均已删除。当前卡通贴纸、识别、营养等 AI 能力全部由**云端**完成（见 `README.md` 架构）。本文件仅留作历史参考，请勿再据此操作。
+
 ## 0. 环境准备
 
 ```bash

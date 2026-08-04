@@ -19,6 +19,7 @@ final class AuthGateViewController: UIViewController {
 
     // 一键登录主按钮
     private let oneKeyButton = UIButton(type: .system)
+    private let oneKeyTitleLabel = UILabel()
     private let maskedPhoneLabel = UILabel()
 
     // 其他登录方式
@@ -71,12 +72,16 @@ final class AuthGateViewController: UIViewController {
         oneKeyButton.backgroundColor = AppPrimary
         oneKeyButton.layer.cornerRadius = 14
         oneKeyButton.setTitleColor(.white, for: .normal)
-        oneKeyButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        // 不通过 setTitle 设置文字，避免和内部自定义 stack 重叠
+        oneKeyButton.setTitle("", for: .normal)
         oneKeyButton.addTarget(self, action: #selector(oneKeyTapped), for: .touchUpInside)
-        let stack = UIStackView(arrangedSubviews: [
-            { let l = UILabel(); l.text = "本机号码一键登录"; l.font = .systemFont(ofSize: 17, weight: .semibold); l.textColor = .white; return l }(),
-            maskedPhoneLabel
-        ])
+
+        oneKeyTitleLabel.text = "本机号码一键登录"
+        oneKeyTitleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        oneKeyTitleLabel.textColor = .white
+        oneKeyTitleLabel.textAlignment = .center
+
+        let stack = UIStackView(arrangedSubviews: [oneKeyTitleLabel, maskedPhoneLabel])
         stack.axis = .vertical
         stack.spacing = 2
         stack.alignment = .center
@@ -302,12 +307,22 @@ final class AuthGateViewController: UIViewController {
 
     private func showLoading(on button: UIButton, text: String) {
         button.isEnabled = false
-        button.setTitle(text + "…", for: .normal)
+        if button === oneKeyButton {
+            oneKeyTitleLabel.text = text + "…"
+            maskedPhoneLabel.isHidden = true
+        } else {
+            button.setTitle(text + "…", for: .normal)
+        }
     }
 
     private func hideLoading(_ button: UIButton) {
         button.isEnabled = true
-        button.setTitle("登录", for: .normal)
+        if button === oneKeyButton {
+            oneKeyTitleLabel.text = "本机号码一键登录"
+            maskedPhoneLabel.isHidden = false
+        } else {
+            button.setTitle("登录", for: .normal)
+        }
     }
 }
 

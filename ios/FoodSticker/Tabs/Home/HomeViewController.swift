@@ -5,24 +5,46 @@ import SwiftUI
 
 final class HomeViewController: UIViewController {
 
+    private var hosting: UIHostingController<HomeView>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationController?.setNavigationBarHidden(true, animated: false)
 
+        mountHosting()
+
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(rerender),
+            name: .authDidChange, object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: .authDidChange, object: nil)
+    }
+
+    private func mountHosting() {
         let homeView = HomeView(onProfile: { [weak self] in
             self?.openProfile()
         })
-        let hosting = UIHostingController(rootView: homeView)
-        addChild(hosting)
-        hosting.view.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(hosting.view)
+        let h = UIHostingController(rootView: homeView)
+        addChild(h)
+        h.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(h.view)
         NSLayoutConstraint.activate([
-            hosting.view.topAnchor.constraint(equalTo: view.topAnchor),
-            hosting.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            hosting.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            hosting.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            h.view.topAnchor.constraint(equalTo: view.topAnchor),
+            h.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            h.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            h.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
-        hosting.didMove(toParent: self)
+        h.didMove(toParent: self)
+        self.hosting = h
+    }
+
+    @objc private func rerender() {
+        let homeView = HomeView(onProfile: { [weak self] in
+            self?.openProfile()
+        })
+        hosting?.rootView = homeView
     }
 
     // MARK: - 打开「我的」

@@ -9,6 +9,7 @@ struct HomeView: View {
     // MARK: - 数据源
 
     @ObservedObject private var store = AppDataStore.shared
+    @ObservedObject private var avatarStore = AvatarStore.shared
 
     /// 从 Repository 异步加载的仪表盘数据（PK 分数、昵称、目标等）
     @State private var dashboardData: DashboardData?
@@ -18,55 +19,60 @@ struct HomeView: View {
     @State private var savedSports: [SavedSport] = []
 
     private enum ActiveSheet: Identifiable {
-        case exercise, weight, water
+        case exercise, exerciseList, weight, water
         var id: Int { hashValue }
     }
 
     // MARK: - 派生数据（全部由 AppDataStore + Repository 驱动）
 
-    /// 昵称：仪表盘 → 用户资料 → 后备
+    /// 昵称：AvatarStore（全站中枢）→ 仪表盘 → 用户资料 → 后备
     private var displayNickname: String {
         if store.dashboardRepo is GuestDashboardRepository { return "未登录" }
-        return dashboardData?.myNickname ?? store.profile.name
+        let avatarName = avatarStore.nickname
+        if avatarName != "未登录" && !avatarName.isEmpty { return avatarName }
+        let n = dashboardData?.myNickname ?? store.profile.name
+        return n.isEmpty ? "我" : n
     }
 
     // MARK: PK 双方数据
 
     private var pkMe: PKUserInfo {
-        let refGoal = max(Double(dashboardData?.todayCalorieGoal ?? store.profile.calorieTarget), 100)
-        let score = dashboardData?.myScore ?? store.todayCaloriesConsumed
+        let meScore = dashboardData?.todayCalorieIntake ?? store.todayCaloriesConsumed
+        let goal    = max(1, dashboardData?.todayCalorieGoal ?? max(store.calorieTarget, 2000))
+        let rival   = dashboardData?.opponentScore ?? 0
+        let meProg  = min(100, Double(meScore) / Double(goal) * 100)
         return PKUserInfo(
             name: displayNickname,
-            avatar: "AvatarMe",
-            score: score,
-            progress: min(100, Double(score) / refGoal * 100),
+            avatar: avatarStore.avatarImage,
+            score: meScore,
+            progress: meProg,
             isSelf: true,
-            isLeader: false
+            isLeader: meScore > rival
         )
     }
 
     private var pkRival: PKUserInfo {
-        let refGoal = max(Double(dashboardData?.todayCalorieGoal ?? store.profile.calorieTarget), 100)
-        let score = dashboardData?.opponentScore ?? 0
+        let rivalScore = dashboardData?.opponentScore ?? 0
+        let goal       = max(1, dashboardData?.todayCalorieGoal ?? max(store.calorieTarget, 2000))
+        let meScore    = dashboardData?.todayCalorieIntake ?? store.todayCaloriesConsumed
+        let rivalProg  = min(100, Double(rivalScore) / Double(goal) * 100)
         return PKUserInfo(
-            name: dashboardData?.opponentNickname ?? "暂无对手",
-            avatar: "AvatarRival",
-            score: score,
-            progress: min(100, Double(score) / refGoal * 100),
+            name: dashboardData?.opponentNickname ?? "对方",
+            avatar: nil,
+            score: rivalScore,
+            progress: rivalProg,
             isSelf: false,
-            isLeader: dashboardData?.opponentIsLeader ?? false
+            isLeader: rivalScore > meScore
         )
     }
 
     // MARK: 热量卡
 
-    private var intake: Int { store.todayCaloriesConsumed }
-    private var calorieTarget: Int {
-        dashboardData?.todayCalorieGoal ?? store.profile.calorieTarget
-    }
+    private var intake: Int { AuthService.shared.isLoggedIn ? store.todayCaloriesConsumed : 0 }
+    private var calorieTarget: Int { store.calorieTarget > 0 ? store.calorieTarget : 2000 }
     private var exerciseCals: Int { store.todayExerciseCalories }
-    private var burned: Int { exerciseCals + 174 }
-    private var remaining: Int { max(0, calorieTarget - intake + exerciseCals) }
+    private var burned: Int { exerciseCals }
+    private var remaining: Int { max(0, calorieTarget - intake) }
 
     // MARK: 进度条
 
@@ -74,9 +80,15 @@ struct HomeView: View {
         min(100, Double(exerciseCals) / 700.0 * 100.0)
     }
 
+    private var waterGoal: Double {
+        let g = Double(dashboardData?.waterGoalML ?? 0)
+        return g > 0 ? g : 0
+    }
+
     private var waterProgress: Double {
-        min(100, Double(store.todayWaterIntake)
-            / Double(dashboardData?.waterGoalML ?? 2000) * 100.0)
+        let goal = waterGoal
+        guard goal > 0 else { return 0 }
+        return min(100, Double(store.todayWaterIntake) / goal * 100.0)
     }
 
     private var weightProgress: Double {
@@ -109,9 +121,9 @@ struct HomeView: View {
     // MARK: 饮水 meta
 
     private var waterMetaText: String {
-        let goal = dashboardData?.waterGoalML ?? 2000
+        let goal = waterGoal
         return String(format: "目标 %.1fL · 今日已记录",
-                      Double(goal) / 1000.0)
+                      goal / 1000.0)
     }
 
     // MARK: - Body
@@ -130,8 +142,10 @@ struct HomeView: View {
 
                     // 2. 主内容区
                     VStack(spacing: 0) {
-                        // PK 卡片
-                        PKCardView(user1: pkMe, user2: pkRival)
+                        // PK 卡片（登录 + 绑定对手后显示）
+                        if AuthService.shared.isLoggedIn, dashboardData?.hasOpponent == true {
+                            PKCardView(user1: pkMe, user2: pkRival, hasOpponent: true)
+                        }
 
                         // 热量概览
                         CalorieCardView(
@@ -147,7 +161,8 @@ struct HomeView: View {
                             progress: exerciseProgress,
                             value: "\(exerciseCals) kcal",
                             meta: exerciseMetaText,
-                            onTap: { activeSheet = .exercise }
+                            onTap: { activeSheet = .exercise },
+                            onRowTap: { activeSheet = .exerciseList }
                         )
 
                         // 今日体重
@@ -192,11 +207,10 @@ struct HomeView: View {
             let repo = store.dashboardRepo
             do {
                 let data = try await repo.fetchDashboard()
-                // 合并仪表盘数据到用户资料（昵称、目标）
+                // 合并仪表盘数据到用户资料（仅昵称，热量预算由用户自行设定）
                 if let name = data.myNickname, !name.isEmpty {
                     store.profile.name = name
                 }
-                store.profile.calorieTarget = data.todayCalorieGoal
                 dashboardData = data
             } catch {
                 print("[HomeView] Dashboard fetch failed: \(error)")
@@ -212,10 +226,10 @@ struct HomeView: View {
         case .exercise:
             AnyView(ExerciseModalView(
                 savedSports: $savedSports,
-                onConfirm: { _, calories in
+                onConfirm: { name, calories, duration in
                     let record = DailyRecord(
-                        type: .exercise, name: "运动",
-                        calories: calories, amount: 30)
+                        type: .exercise, name: name,
+                        calories: calories, amount: Double(duration), unit: "min")
                     store.addRecord(record)
                     activeSheet = nil
                 },
@@ -246,6 +260,28 @@ struct HomeView: View {
                 },
                 onDismiss: { activeSheet = nil }
             ))
+        case .exerciseList:
+            AnyView(ExerciseRecordListSheet(
+                records: exerciseRecords,
+                onDelete: { indexSet in
+                    deleteExerciseRecords(at: indexSet)
+                },
+                onAdd: { activeSheet = .exercise },
+                onDismiss: { activeSheet = nil }
+            ))
+        }
+    }
+
+    // MARK: - 运动记录辅助
+
+    private var exerciseRecords: [DailyRecord] {
+        store.todayRecords.filter { $0.type == .exercise }
+    }
+
+    private func deleteExerciseRecords(at offsets: IndexSet) {
+        let toRemove = offsets.map { exerciseRecords[$0] }
+        for record in toRemove {
+            store.removeRecord(record.id)
         }
     }
 }

@@ -239,6 +239,7 @@ enum DiaryMode: String, CaseIterable {
 // MARK: - Mock 数据（对齐 Web 端 foodStickersData）
 // MARK: =====================================================================
 
+/// 预设贴纸数据（CardMock），用于贴纸日记页的板子布局和"选择已有"降级展示
 enum CardMock {
     static let me: [FoodSticker] = [
         FoodSticker(imageName: "sticker_salad", name: "水果沙拉", cal: 180, date: "7月20日", time: "08:15",
@@ -328,6 +329,8 @@ struct CardTopBar: View {
     /// 点击右侧「我的」头像入口（与首页顶部保持一致）
     var onProfileTap: (() -> Void)? = nil
 
+    @ObservedObject private var avatarStore = AvatarStore.shared
+
     var body: some View {
         // 与首页 TopBarView 统一：问候语 + 昵称(标题) / 副标题，右侧「我的」头像按钮
         HStack(spacing: 0) {
@@ -341,7 +344,7 @@ struct CardTopBar: View {
             }
             Spacer()
             Button(action: { onProfileTap?() }) {
-                AvatarView(AvatarStore.shared.avatarImage, size: 40)
+                AvatarView(avatarStore.avatarImage, size: 40)
             }
             .buttonStyle(.plain)
         }
@@ -544,8 +547,8 @@ struct WeekCalendarView: View {
             )
         }
         .frame(height: CardTokens.Week.itemH + 8)
-        // 只裁左右（隐藏相邻周页面），上下各放宽 14pt，避免选中格的下投阴影被裁掉
-        .mask(Rectangle().padding(.vertical, -14))
+        // 只裁左右（隐藏相邻周页面），上下各放宽 14pt，左右各放宽 4pt，避免选中格的绿色边框/下投阴影被裁掉
+        .mask(Rectangle().padding(.vertical, -14).padding(.horizontal, -4))
         .padding(.horizontal, CardTokens.Spacing.h)
     }
 }
@@ -937,6 +940,7 @@ struct FoodBoardView: View {
     let stickers: [BoardSticker]
     @Binding var selected: FoodSticker?
     let totalCalories: Int
+    var onAddTap: (() -> Void)? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -980,14 +984,13 @@ struct FoodBoardView: View {
                                     .font(.app(size: 22, weight: .medium))
                                     .foregroundColor(CardTokens.Color.primary.opacity(0.6))
                             )
+                            .onTapGesture {
+                                onAddTap?()
+                            }
                         Text("这一天还没有记录食物")
                             .font(.app(size: 14, weight: .medium))
                             .foregroundColor(CardTokens.Color.foregroundMuted)
-                        Text("点击下方按钮添加")
-                            .font(.app(size: 12))
-                            .foregroundColor(CardTokens.Color.foregroundSubtle)
                     }
-                    .allowsHitTesting(false)
                 }
 
                 // 贴纸
@@ -1037,6 +1040,7 @@ struct BellyCharacterView: View {
     let stickers: [BoardSticker]
     @Binding var selected: FoodSticker?
     let totalCalories: Int
+    var onAddTap: (() -> Void)? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -1055,7 +1059,7 @@ struct BellyCharacterView: View {
                     .position(x: w / 2, y: totalH - 31)
 
                 // 胃壁板（z-[1]）
-                FoodBoardView(stickers: stickers, selected: $selected, totalCalories: totalCalories)
+                FoodBoardView(stickers: stickers, selected: $selected, totalCalories: totalCalories, onAddTap: onAddTap)
                     .frame(width: boardW, height: boardH)
                     .position(x: w / 2, y: padTop + boardH / 2)
 
@@ -1136,8 +1140,18 @@ struct FoodRecordList: View {
             VStack(spacing: 10) {
                 ForEach(records) { r in
                     HStack(spacing: 12) {
-                        // 真实保存的食物可能无预置贴纸图（imageName 为空），回退为首字占位
-                        if !r.imageName.isEmpty {
+                        // 优先展示真实保存的食物图片（uiImage），其次是预置贴纸，最后回退为首字占位
+                        if let ui = r.uiImage {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: CardTokens.Board.tileSize, height: CardTokens.Board.tileSize)
+                                .background(
+                                    RoundedRectangle(cornerRadius: CardTokens.Radius.tile)
+                                        .fill(CardTokens.Color.primaryBg10)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: CardTokens.Radius.tile))
+                        } else if !r.imageName.isEmpty {
                             Image(r.imageName)
                                 .resizable()
                                 .scaledToFit()
@@ -1274,8 +1288,20 @@ struct StickerDetailView: View {
                     let dist = abs(CGFloat(i) - cpos)
                     let opacity = max(0.5, 1 - dist * 0.7)         // Web: max(0.5, 1 - dist*0.7)
                     let scale = 1 - min(0.1, dist * 0.08)          // Web: 1 - min(0.1, dist*0.08)
-                    // 真实保存的食物可能无预置贴纸图（imageName 为空），回退为首字占位
-                    if !s.imageName.isEmpty {
+                    // 优先展示真实保存的食物图片（uiImage），其次是预置贴纸，最后回退为首字占位
+                    if let ui = s.uiImage {
+                        Image(uiImage: ui)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: slideW * 0.8, height: imgH)
+                            .clipShape(RoundedRectangle(cornerRadius: 28))
+                            .overlay(RoundedRectangle(cornerRadius: 28)
+                                .stroke(Color.white, lineWidth: 5))
+                            .shadow(color: CardTokens.Color.primary.opacity(0.22), radius: 11, y: 10)
+                            .opacity(opacity)
+                            .scaleEffect(scale)
+                            .frame(width: slideW)
+                    } else if !s.imageName.isEmpty {
                         Image(s.imageName)
                             .resizable()
                             .scaledToFill()
@@ -1637,34 +1663,52 @@ private struct ScaleButtonStyle: ButtonStyle {
 
 struct CardPageView: View {
     @StateObject private var store = AppDataStore.shared
+    @ObservedObject private var avatarStore = AvatarStore.shared
     @State private var mode: DiaryMode = .me
     @State private var selectedDay = Date()
     @State private var selected: FoodSticker?
+    @State private var calendarResetID = UUID()
     /// 点击顶部「我的」头像入口
     var onProfile: (() -> Void)? = nil
+    /// 点击空状态「+」或需要添加食物 → 唤起拍摄
+    var onAddTap: (() -> Void)? = nil
     private var nickname: String {
-        mode == .me ? store.profile.name : "阿泽"
+        if mode == .me {
+            // 优先 AvatarStore（全站中枢），回退 profile.name
+            let avatarName = avatarStore.nickname
+            if avatarName != "未登录" && !avatarName.isEmpty { return avatarName }
+            return store.profile.name.isEmpty ? "我" : store.profile.name
+        } else {
+            return store.partnerProfile.name.isEmpty ? "对方" : store.partnerProfile.name
+        }
     }
 
-    // 今日真实保存的食物（来自 AppDataStore.todayRecords，动态加载）
-    private var todayFoodStickers: [FoodSticker] {
-        store.todayRecords
-            .filter { $0.type == .food }
+    private let dayFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "M月d日"; return f
+    }()
+
+    /// 当前选中日期对应的「M月d日」标签，用于按日期过滤食物数据
+    private var selectedLabel: String { dayFmt.string(from: selectedDay) }
+
+    /// 当前选中日期真实保存的食物
+    /// - .me 读取我方记录（todayRecords），.him 读取对方记录（partnerRecords，二维码关联后写入）
+    private var foodStickers: [FoodSticker] {
+        let source = mode == .me ? store.todayRecords : store.partnerRecords
+        return source
+            .filter { $0.type == .food && $0.date == selectedLabel }
             .map {
-                FoodSticker(imageName: "", uiImage: nil, name: $0.name, cal: $0.calories,
-                            date: todayLabel, time: $0.time)
+                FoodSticker(imageName: "",
+                            uiImage: $0.imageData.flatMap { UIImage(data: $0) },
+                            name: $0.name, cal: $0.calories,
+                            date: $0.date, time: $0.time,
+                            protein: $0.protein, carbs: $0.carbs, fat: $0.fat,
+                            fiber: $0.fiber, sugar: $0.sugar, salt: $0.salt, tip: $0.tip)
             }
     }
 
-    private var todayLabel: String {
-        let f = DateFormatter(); f.dateFormat = "M月d日"; return f.string(from: Date())
-    }
-
-    // 胃壁板：在我的/对方模式下，把今日真实贴纸追加在 Mock 之上（动态）
+    // 胃壁板：把当前选中日期的真实贴纸错落摆放（已清空 Mock，仅展示真实数据）
     private var boardStickers: [BoardSticker] {
-        let mock = CardMock.board(for: mode)
-        guard mode == .me else { return mock }
-        let extras = todayFoodStickers.enumerated().map { i, s in
+        foodStickers.enumerated().map { i, s in
             // 在板右上角区域错落摆放真实贴纸
             let lefts: [CGFloat] = [0.30, 0.62, 0.45, 0.78, 0.20]
             let tops:  [CGFloat] = [0.30, 0.45, 0.62, 0.72, 0.18]
@@ -1676,13 +1720,10 @@ struct CardPageView: View {
                                 scale: 0.82,
                                 zIndex: 10 + i)
         }
-        return mock + extras
     }
 
     private var boardCalories: Int {
-        let mock = CardMock.totalCalories(for: mode)
-        let real = todayFoodStickers.reduce(0) { $0 + $1.cal }
-        return mode == .me ? mock + real : mock
+        foodStickers.reduce(0) { $0 + $1.cal }
     }
 
     var body: some View {
@@ -1690,36 +1731,39 @@ struct CardPageView: View {
             VStack(spacing: CardTokens.Spacing.section) {
                 CardTopBar(nickname: nickname, onProfileTap: onProfile)
 
-                // 对齐 Web：今天 + 我的/对方的 + 右侧两个图标按钮
+                // 今天 + 我的/对方的 + 回到今日
                 HStack {
                     Text("今天")
                         .font(.app(size: FontSize.xl2, weight: .bold))
                         .foregroundColor(CardTokens.Color.foreground)
                     DiarySegmented(mode: $mode)
                     Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(CardTokens.Color.primary.opacity(0.1))
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Image(systemName: "chart.line.uptrend.xyaxis")
-                                    .font(.app(size: 16))
-                                    .foregroundColor(CardTokens.Color.primary)
+                    if !Calendar.current.isDate(selectedDay, inSameDayAs: Date()) {
+                        Button(action: {
+                            selectedDay = Date()
+                            calendarResetID = UUID()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 10, weight: .medium))
+                                Text("回到今日")
+                                    .font(.app(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(Color(hex: "#4CAF50"))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "#E8F5E9"))
                             )
-                        Circle()
-                            .fill(CardTokens.Color.primary.opacity(0.1))
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Image(systemName: "waveform")
-                                    .font(.app(size: 16))
-                                    .foregroundColor(CardTokens.Color.primary)
-                            )
+                        }
                     }
                 }
                 .padding(.horizontal, CardTokens.Spacing.h)
                 .padding(.top, 8)
 
                 WeekCalendarView(selectedDay: $selectedDay)
+                    .id(calendarResetID)
                     .padding(.top, 4)
 
                 HStack {
@@ -1734,16 +1778,17 @@ struct CardPageView: View {
                 .padding(.horizontal, CardTokens.Spacing.h)
                 .padding(.vertical, 8)
 
-                BellyCharacterView(stickers: boardStickers, selected: $selected, totalCalories: boardCalories)
+                // 同一份数据实例：胃壁、列表、详情共用，避免 id 不一致导致详情定位错位
+                let foods = foodStickers
+                BellyCharacterView(stickers: foods.isEmpty ? [] : boardStickers, selected: $selected, totalCalories: boardCalories, onAddTap: onAddTap)
 
                 CalorieBudgetCard(
-                    target: (mode == .me ? AppDataStore.shared.profile : AppDataStore.shared.partnerProfile).calorieTarget,
+                    target: AppDataStore.shared.calorieTarget,
                     consumed: boardCalories
                 )
 
-                // 今日记录：真实展示今天保存的食物（动态加载 AppDataStore.todayRecords），非静态 Mock
-                let records = mode == .me ? todayFoodStickers : CardMock.stickers(for: .him)
-                FoodRecordList(records: records) { r in
+                // 今日记录：真实展示当前选中日期保存的食物（动态加载 AppDataStore.todayRecords）
+                FoodRecordList(records: foods) { r in
                     selected = r
                 }
 
@@ -1751,16 +1796,33 @@ struct CardPageView: View {
             }
         }
         .background(CardTokens.Color.background)
-        // todayRecords / savedStickers 变更 → 仅刷新依赖子视图，避免 .id() 整页重建导致 OOM
-        .onChange(of: store.todayRecords.count) { _ in /* 触发 todayFoodStickers/boardStickers/boardCalories 重算 */ }
-        .onChange(of: store.savedStickers.count) { _ in /* 同上 */ }
+        // todayRecords / savedStickers / selectedDay / mode 变更 → 刷新依赖子视图
+        .onChange(of: store.todayRecords.count) { _ in }
+        .onChange(of: store.savedStickers.count) { _ in }
+        .onChange(of: selectedDay) { _ in }
+        .onChange(of: mode) { _ in }
         .fullScreenCover(item: $selected) { sticker in
-            // 使用完整贴纸列表（与 Web 一致），保证从"今日记录"或胃壁板任一入口打开都能定位
-            let stickers = mode == .me
-                ? (todayFoodStickers + CardMock.stickers(for: .me))
-                : CardMock.stickers(for: .him)
-            let idx = stickers.firstIndex(where: { $0.id == sticker.id }) ?? 0
-            StickerDetailView(stickers: stickers, initialIndex: idx)
+            // 使用与列表/胃壁同一份实例，保证点击定位精准（不会回退到第 0 个）
+            let stickers = foodStickers
+            let idx = stickers.firstIndex(where: { $0.id == sticker.id })
+                ?? stickers.firstIndex(where: { $0.name == sticker.name && $0.cal == sticker.cal && $0.time == sticker.time })
+                ?? 0
+            StickerDetailView(stickers: stickers, initialIndex: idx, onDelete: {
+                // 仅在「我的」模式下允许删除；对方记录仅可查看
+                guard mode == .me else {
+                    selected = nil
+                    return
+                }
+                let target = sticker
+                let source = store.todayRecords
+                if let record = source.first(where: {
+                    $0.name == target.name && $0.calories == target.cal &&
+                    $0.date == target.date && $0.time == target.time
+                }) {
+                    store.removeRecord(record.id)
+                }
+                selected = nil
+            })
         }
     }
 }

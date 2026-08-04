@@ -105,12 +105,13 @@ final class StomachViewController: UIViewController {
         let water = store.todayWaterIntake
         let exercise = store.todayExerciseCalories
 
-        let remaining = max(0, store.profile.calorieTarget - cal + exercise)
+        let remaining = max(0, store.calorieTarget - cal)
         let foodCount = store.todayRecords.filter { $0.type == .food }.count
 
         statusLabel.text = foodCount > 0 ? "🫧 正在消化中..." : "😴 肚子空空"
 
-        let ratio = store.profile.calorieTarget > 0 ? min(1.0, Float(cal) / Float(store.profile.calorieTarget)) : 0.5
+        let target = store.calorieTarget > 0 ? store.calorieTarget : 2000
+        let ratio = min(1.0, Float(cal) / Float(target))
         progressBar.progress = ratio
 
         detailLabel.text = """

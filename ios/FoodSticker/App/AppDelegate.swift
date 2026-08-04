@@ -10,6 +10,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // 启动时预初始化营养库连接（首次运行会从 Bundle 拷贝 nutrition.db 到 Documents）
         _ = NutritionDB.shared
+
+#if DEBUG
+        // 开发调试：UserDefaults 中 fs_debug_clear_on_launch = true 时清空全部数据
+        if UserDefaults.standard.bool(forKey: "fs_debug_clear_on_launch") {
+            AppDataStore.shared.clearAllData()
+            UserDefaults.standard.removeObject(forKey: "fs_debug_clear_on_launch")
+            print("[AppDelegate] 已清空全部数据")
+        }
+#endif
+
         return true
     }
 

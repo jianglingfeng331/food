@@ -8,6 +8,22 @@ enum MattingError: Error {
     case renderFailed
 }
 
+/// 设备性能档位，决定端侧 MobileSAM 的输入分辨率（低端机降级 512，其余 1024）。
+enum DeviceTier {
+    case low, mid, high
+
+    /// 依据物理内存粗略判断；模拟器按 high 处理。
+    static func detect() -> DeviceTier {
+        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+        #if targetEnvironment(simulator)
+        return .high
+        #else
+        if physicalMemory < 3_000_000_000 { return .low }
+        return .high
+        #endif
+    }
+}
+
 /// 端侧抠图引擎：MobileSAM (FP16, ANE/Metal)
 /// 输入拍摄原图 → 输出原图分辨率 Alpha 遮罩（已做1.5px高斯模糊消锯齿）
 final class MattingEngine {

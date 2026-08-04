@@ -19,11 +19,14 @@ struct ProfileView: View {
     var onLogin: (() -> Void)? = nil
 
     private var isGuest: Bool { AuthService.shared.currentUser == nil }
+    /// 昵称以 AvatarStore 为主源：所有编辑入口都写入 AvatarStore，保证全站一致
     private var displayName: String {
-        if let u = AuthService.shared.currentUser {
-            return u.nickname.isEmpty ? "用户" : u.nickname
+        let n = avatarStore.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !n.isEmpty { return n }
+        if let u = AuthService.shared.currentUser, !u.nickname.isEmpty {
+            return u.nickname
         }
-        return avatarStore.nickname
+        return "用户"
     }
 
     // 减重进度数据
@@ -200,6 +203,8 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 52)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

@@ -13,7 +13,7 @@ final class CloudAPI {
         return URL(string: "http://127.0.0.1:8000")!
     }
     #else
-    private var base = URL(string: "https://api.yourserver.com")!
+    private var base = URL(string: "https://rubyace.love")!
     #endif
 
     private let session: URLSession = {
@@ -142,6 +142,27 @@ final class CloudAPI {
             body: Req(name: name, avatar: avatar, currentWeight: currentWeight,
                       targetWeight: targetWeight, height: height))
         return try JSONDecoder().decode(CkUser.self, from: data)
+    }
+
+    // MARK: - 火山方舟代理接口（密钥仅存服务端，客户端不持有 Key）
+
+    /// 图生图卡通贴纸（通过服务端代理调用火山方舟 seedream）
+    func generateSticker(foodName: String, originalPhoto: UIImage) async throws -> UIImage {
+        let ref = originalPhoto.resized(maxSide: 1024)
+        guard let jpeg = ref.jpegData(compressionQuality: 0.8) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        let b64 = jpeg.base64EncodedString()
+        struct Req: Encodable { let food_name: String; let image_b64: String }
+        struct Res: Decodable { let sticker_png_b64: String }
+        let data = try await authed("/sticker/seedream", method: "POST",
+                                    body: Req(food_name: foodName, image_b64: b64))
+        let r = try JSONDecoder().decode(Res.self, from: data)
+        guard let d = Data(base64Encoded: r.sticker_png_b64),
+              let img = UIImage(data: d) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        return img
     }
 
     // MARK: - 原有 ML 接口（保持不变）

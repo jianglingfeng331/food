@@ -58,6 +58,7 @@ final class AuthService {
         currentUser = nil
         isLoggedIn = false
         UserDefaults.standard.removeObject(forKey: sessionKey)
+        NotificationCenter.default.post(name: .authDidChange, object: nil)
     }
 
     /// 登录态下更新当前用户资料（昵称/头像），并刷新持久化与通知。
