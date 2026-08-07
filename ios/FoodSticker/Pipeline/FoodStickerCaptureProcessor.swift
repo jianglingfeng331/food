@@ -39,7 +39,7 @@ final class FoodStickerCaptureProcessor {
         // 第一次（前置）抠图：秒级给用户展示贴纸效果
         helper.segmentForeground(from: originalImage, roiRect: roiRect) { [weak self] cutout in
             guard let self else { return }
-            print("[Pipeline] 首次抠图: \(cutout != nil ? "成功" : "失败")")
+            Log("[Pipeline] 首次抠图: \(cutout != nil ? "成功" : "失败")")
 
             // 渲染带白边的预览图立即回传
             let preview: UIImage
@@ -83,9 +83,9 @@ final class FoodStickerCaptureProcessor {
 
             // 全部完成后统一回调
             group.notify(queue: .main) {
-                print("[Pipeline] ===== 拍照处理完成 =====")
-                print("[Pipeline] nutritionModel: \(nutritionModel != nil ? "有" : "nil"), error: \(nutritionError?.localizedDescription ?? "无")")
-                print("[Pipeline] stickerImg: \(stickerImg != nil ? "有" : "nil")")
+                Log("[Pipeline] ===== 拍照处理完成 =====")
+                Log("[Pipeline] nutritionModel: \(nutritionModel != nil ? "有" : "nil"), error: \(nutritionError?.localizedDescription ?? "无")")
+                Log("[Pipeline] stickerImg: \(stickerImg != nil ? "有" : "nil")")
                 onFinalResult(stickerImg, nutritionModel, nutritionError)
             }
         }

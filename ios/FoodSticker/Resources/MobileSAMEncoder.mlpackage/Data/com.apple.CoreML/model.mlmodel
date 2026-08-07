@@ -1,82 +1,0 @@
-ê
-
-image
-"ÄÄR
-var_11*
-Ä@@êÄ¢ﬁ¢:
-,com.github.apple.coremltools.conversion_date
-2026-07-29¢:
-+com.github.apple.coremltools.source_dialectTorchScript¢+
-$com.github.apple.coremltools.version9.0¢3
-#com.github.apple.coremltools.sourcetorch==2.8.0≤œ‚
-mainŸ
-)
-image 
-
-
-
-Ä
-ÄCoreML6¢
-CoreML6ñvar_11ü
-const)
-var_11
-
-
-
-Ä
-@
-@*
-name
-
-"	
-op_11_1*L
-valE
-
-
-
-Ä
-@
-@*"
-@model_path/weights/weight.bin@j
-identity
-x	
-
-image-
-	image_tmp 
-
-
-
-Ä
-Ä*
-name
-
-"
-	image_tmp"Â
-	buildInfo◊"
-
-
-ƒ"¡
-6
-!
-
-"
-coremltools-version
-	
-"
-9.0
-@
-)
-!
-"
-coremltools-component-torch
-
-	"
-2.8.0
-E
-(
- 
-"
-coremltools-source-dialect
-
-"
-TorchScript

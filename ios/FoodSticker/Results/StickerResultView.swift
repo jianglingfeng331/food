@@ -668,10 +668,10 @@ struct StickerResultView: View {
     /// 加载模式下（reanalyzeName != nil）由 onAppear 调用，启动重识别 API
     /// API 回调后 dismiss 加载页 → present 结果页
     private func startReanalyze(name: String) {
-        print("[StickerResultView] startReanalyze, name=\(name)")
+        Log("[StickerResultView] startReanalyze, name=\(name)")
         FoodNutritionService.shared.analyzeByName(name) { result, _ in
             DispatchQueue.main.async {
-                print("[StickerResultView] startReanalyze 回调, result=\(result?.foodName ?? "nil")")
+                Log("[StickerResultView] startReanalyze 回调, result=\(result?.foodName ?? "nil")")
                 if let result = result {
                     CaptureStore.shared.update(self.taskID) { t in t.cloudNutrition = result }
                 }

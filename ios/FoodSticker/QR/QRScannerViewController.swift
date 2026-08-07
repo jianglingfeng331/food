@@ -93,14 +93,16 @@ final class QRScannerViewController: UIViewController {
     }
 
     private func setupButtons() {
-        closeButton.setTitle("关闭", for: .normal)
-        closeButton.setTitleColor(.white, for: .normal)
+        closeButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
+        closeButton.tintColor = .white
         closeButton.addTarget(self, action: #selector(close), for: .touchUpInside)
         view.addSubview(closeButton)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
+            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            closeButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            closeButton.widthAnchor.constraint(equalToConstant: 44),
+            closeButton.heightAnchor.constraint(equalToConstant: 44)
         ])
 
         albumButton.setTitle("从相册选图识别", for: .normal)

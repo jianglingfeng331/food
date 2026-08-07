@@ -16,7 +16,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         if UserDefaults.standard.bool(forKey: "fs_debug_clear_on_launch") {
             AppDataStore.shared.clearAllData()
             UserDefaults.standard.removeObject(forKey: "fs_debug_clear_on_launch")
-            print("[AppDelegate] 已清空全部数据")
+            Log("[AppDelegate] 已清空全部数据")
         }
 #endif
 

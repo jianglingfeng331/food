@@ -9,19 +9,32 @@ final public class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                willConnectTo session: UISceneSession,
                options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else {
-            print("❌ SceneDelegate: windowScene 转换失败")
+            Log("❌ SceneDelegate: windowScene 转换失败")
             return
         }
-        print("✅ SceneDelegate: willConnectTo 已触发")
+        Log("✅ SceneDelegate: willConnectTo 已触发")
 
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = MainTabBarController()
         self.window = window
         window.makeKeyAndVisible()
-        print("✅ SceneDelegate: MainTabBarController 已设置，window 已可见")
+        Log("✅ SceneDelegate: MainTabBarController 已设置，window 已可见")
 
         // 游客模式：默认以本地数据进入，无需强制登录。
         // 若已存在持久化会话（上次登录过），则尝试同步云端数据。
         Task { await AppDataStore.shared.bootstrap() }
+
+        // 未登录时弹出登录流程（欢迎页 → 注册/登录）。
+        // AuthGateViewController 内的协议勾选通过后展示对应登录/注册入口。
+        if !AuthService.shared.isLoggedIn {
+            AuthCoordinator.shared.requireLogin(from: window.rootViewController!) { [weak self] in
+                Log("✅ SceneDelegate: 登录完成，进入主流程")
+            }
+        }
+    }
+
+    // App 进入前台时检查日期变化（跨天后自动更新缓存）
+    public func sceneWillEnterForeground(_ scene: UIScene) {
+        AppDataStore.shared.checkDayChangeAndUpdate()
     }
 }

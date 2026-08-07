@@ -5,13 +5,11 @@ import Foundation
 /// 本期实现：全程端侧模拟，无任何真实网络/短信。
 /// - 账号库持久化在 UserDefaults（JSON）。
 /// - 验证码本地生成，通过 Toast + 控制台打印"模拟收到短信"。
-/// - 一键登录模拟运营商 1.2s 授权，返回脱敏本机号，首次自动建号。
 final class MockAuthProvider: AuthProvider {
 
     // MARK: 本地存储
     private let accountKey = "mock_auth_accounts"
     private let codeKey    = "mock_auth_sms_codes"
-    private let oneKeyPhoneKey = "mock_onekey_phone"
 
     private var accounts: [String: MockAccount] {
         get { (UserDefaults.standard.dictionary(forKey: accountKey) as? [String: Data])?
@@ -33,12 +31,6 @@ final class MockAuthProvider: AuthProvider {
         }
     }
 
-    /// 一键登录使用的"本机脱敏号"，可在设置里改测试号。默认 138****8000。
-    var oneKeyMaskedPhone: String {
-        get { UserDefaults.standard.string(forKey: oneKeyPhoneKey) ?? "138****8000" }
-        set { UserDefaults.standard.set(newValue, forKey: oneKeyPhoneKey) }
-    }
-
     // MARK: 验证码
 
     func sendSMSCode(phone: String) async throws -> String {
@@ -48,7 +40,7 @@ final class MockAuthProvider: AuthProvider {
         c[phone] = CodeTicket(code: code, expireAt: Date().addingTimeInterval(5 * 60))
         codes = c
         // 模拟下发短信：控制台 + 通过通知让 UI 提示
-        print("📩 [Mock 短信] 验证码已发送至 \(phone)：\(code)（5 分钟内有效）")
+        Log("📩 [Mock 短信] 验证码已发送至 \(phone)：\(code)（5 分钟内有效）")
         NotificationCenter.default.post(name: .mockSMSSent, object: nil,
                                         userInfo: ["phone": phone, "code": code])
         return code
@@ -80,9 +72,15 @@ final class MockAuthProvider: AuthProvider {
         return acc.toUser(.password)
     }
 
-    func register(phone: String, password: String, nickname: String) async throws -> AuthUser {
+    func register(phone: String, code: String, password: String, nickname: String) async throws -> AuthUser {
         guard isValidPhone(phone) else { throw AuthError.invalidPhone }
         guard password.count >= 6 else { throw AuthError.weakPassword }
+        // Mock 模式也校验验证码（与真实流程一致）
+        guard let ticket = codes[phone], ticket.code == code else { throw AuthError.wrongCode }
+        guard ticket.expireAt > Date() else {
+            var c = codes; c.removeValue(forKey: phone); codes = c
+            throw AuthError.codeExpired
+        }
         guard accounts[phone] == nil else { throw AuthError.phoneAlreadyRegistered }
         let acc = MockAccount(phone: phone, password: password,
                               nickname: nickname.isEmpty ? defaultNickname(phone) : nickname,
@@ -91,19 +89,17 @@ final class MockAuthProvider: AuthProvider {
         return acc.toUser(.register)
     }
 
-    // MARK: 一键登录
+    // MARK: 账号密码注册（兜底，不依赖短信）
 
-    func loginByOneKey() async throws -> AuthUser {
-        // 模拟运营商授权耗时
-        try await Task.sleep(nanoseconds: 1_200_000_000)
-        let masked = oneKeyMaskedPhone
-        // 用脱敏号作为账户标识（真实场景运营商返回 token，这里用号作主键）
-        let key = "onekey_\(masked)"
-        let acc = accounts[key] ?? MockAccount(phone: masked, password: nil,
-                                               nickname: defaultNickname(masked),
-                                               avatar: randomAvatar())
-        if accounts[key] == nil { var a = accounts; a[key] = acc; accounts = a }
-        return acc.toUser(.oneKey)
+    func registerByUserID(userID: String, password: String, name: String) async throws -> AuthUser {
+        guard password.count >= 6 else { throw AuthError.weakPassword }
+        let key = userID
+        guard accounts[key] == nil else { throw AuthError.userIDAlreadyRegistered }
+        let acc = MockAccount(phone: userID, password: password,
+                              nickname: name.isEmpty ? defaultNickname(userID) : name,
+                              avatar: randomAvatar())
+        var a = accounts; a[key] = acc; accounts = a
+        return acc.toUser(.register)
     }
 
     // MARK: 工具

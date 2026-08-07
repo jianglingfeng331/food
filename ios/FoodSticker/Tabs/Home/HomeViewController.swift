@@ -16,10 +16,16 @@ final class HomeViewController: UIViewController {
         NotificationCenter.default.addObserver(
             self, selector: #selector(rerender),
             name: .authDidChange, object: nil)
+
+        // 绑定/解绑状态变化时刷新首页（PK 卡片显隐、对手数据）
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(rerender),
+            name: .pkBindingDidChange, object: nil)
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self, name: .authDidChange, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .pkBindingDidChange, object: nil)
     }
 
     private func mountHosting() {

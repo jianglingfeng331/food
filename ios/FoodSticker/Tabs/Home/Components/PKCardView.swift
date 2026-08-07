@@ -4,9 +4,10 @@ import SwiftUI
 
 struct PKUserInfo {
     let name: String
-    let avatar: UIImage?    // 已上传头像；为 nil 时显示默认未上传占位图
+    let avatar: UIImage?            // 已上传头像；为 nil 时使用 emojiAvatar 或默认占位
+    let emojiAvatar: String?        // 后端 emoji 头像（兜底）
     let score: Int
-    let progress: Double    // 0...100
+    let progress: Double            // 0...100
     let isSelf: Bool
     let isLeader: Bool
 }
@@ -17,6 +18,8 @@ struct PKCardView: View {
     let user1: PKUserInfo
     let user2: PKUserInfo
     let hasOpponent: Bool
+    /// 双方是否有任何实际数据：无数据时均不显示皇冠（与 PK 模块一致）
+    var hasData: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -155,10 +158,20 @@ struct PKCardView: View {
 
     private func avatarView(user: PKUserInfo) -> some View {
         ZStack(alignment: .topTrailing) {
-            AvatarView(user.avatar, size: HomeTokens.Size.avatar)
+            if let img = user.avatar {
+                AvatarView(img, size: HomeTokens.Size.avatar)
+            } else if let emoji = user.emojiAvatar, !emoji.isEmpty {
+                Text(emoji)
+                    .font(.system(size: HomeTokens.Size.avatar * 0.55))
+                    .frame(width: HomeTokens.Size.avatar, height: HomeTokens.Size.avatar)
+                    .background(HomeTokens.Color.primaryBg10)
+                    .clipShape(Circle())
+            } else {
+                AvatarView(nil, size: HomeTokens.Size.avatar)
+            }
 
-            // 对方领先显示皇冠
-            if !user.isSelf && user.isLeader {
+            // 领先方显示皇冠（自己或对手均可，与 PK 模块一致；无数据时不显示）
+            if hasData && user.isLeader {
                 crownIcon
             }
         }

@@ -31,6 +31,8 @@ def clean_db():
     """每个测试前重建表"""
     db_mod.Base.metadata.drop_all(bind=db_mod.engine)
     db_mod.Base.metadata.create_all(bind=db_mod.engine)
+    # 测试环境下启用演示数据（正式运行默认关闭）
+    os.environ["FF_ENABLE_SEED"] = "1"
     # 手动种子数据
     db_mod._seed()
     yield

@@ -53,6 +53,7 @@ server/.env
 
 # ===== 数据文件（禁止提交） =====
 server/stickers/
+server/food_images/
 server/foodsticker.db
 *.db
 

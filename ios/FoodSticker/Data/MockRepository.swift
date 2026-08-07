@@ -14,18 +14,28 @@ final class MockDashboardRepository: DashboardRepository {
         let myName = store.profile.name.isEmpty ? nil : store.profile.name
         let rivalName = store.partnerProfile.name.isEmpty ? nil : store.partnerProfile.name
 
+        // 检查 PK 绑定状态：PKBindingCoordinator 是 @MainActor，通过 MainActor.run 读取
+        let (hasOpponent, opponentNick, opponentAvatar) = await MainActor.run {
+            let c = PKBindingCoordinator.shared
+            let bound = c.isBound
+            let nick = bound ? (c.opponent?.nickname ?? rivalName) : rivalName
+            let avatar = bound ? c.opponent?.avatar : nil
+            return (bound, nick, avatar)
+        }
+
         // 已清零所有假数据，用户无真实记录时全部为 0/nil，方便测试
         return DashboardData(
             myNickname: myName,
             myAvatarURL: nil,
 
-            opponentNickname: rivalName,
-            opponentAvatarURL: nil,
+            opponentNickname: opponentNick,
+            opponentAvatarURL: opponentAvatar,
             opponentScore: nil,
+            opponentCalorieGoal: nil,
             opponentIsLeader: false,
 
-            // PK 概要：无对手时全空
-            hasOpponent: false,
+            // PK 概要：依据 PKBindingCoordinator 实时状态
+            hasOpponent: hasOpponent,
             myScore: nil,
             myWins: nil,
             opponentWins: nil,
@@ -36,7 +46,7 @@ final class MockDashboardRepository: DashboardRepository {
             todayExerciseCalories: nil,
             todayExerciseMinutes: nil,
             todayWaterML: nil,
-            waterGoalML: 0,
+            waterGoalML: 2000,
             latestWeight: nil,
             lastWeightTime: nil
         )
@@ -54,6 +64,7 @@ final class GuestDashboardRepository: DashboardRepository {
             opponentNickname: nil,
             opponentAvatarURL: nil,
             opponentScore: nil,
+            opponentCalorieGoal: nil,
             opponentIsLeader: false,
             hasOpponent: false,
             myScore: nil,

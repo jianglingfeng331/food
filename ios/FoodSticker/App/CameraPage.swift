@@ -154,10 +154,14 @@ final class CameraModel: NSObject, ObservableObject {
     private let queue = DispatchQueue(label: "foodsticker.camera.session")
     private var completion: ((UIImage?) -> Void)?
     @Published var isAuthorized = false
+    @Published var isSimulator = false
 
     override init() {
         super.init()
-        session.sessionPreset = .photo
+#if targetEnvironment(simulator)
+        isSimulator = true
+        return
+#endif
         previewView.videoPreviewLayer.session = session
         previewView.videoPreviewLayer.videoGravity = .resizeAspectFill
         requestAccess()
@@ -180,20 +184,46 @@ final class CameraModel: NSObject, ObservableObject {
     private func configureAndStart() {
         queue.async { [weak self] in
             guard let self else { return }
-            self.configureSession()
+            let ok = self.configureSession()
+            guard ok else {
+                Log("[CameraModel] 摄像头配置失败，可能无可用后置摄像头")
+                return
+            }
             self.session.startRunning()
             DispatchQueue.main.async { self.isAuthorized = true }
         }
     }
 
-    private func configureSession() {
+    @discardableResult
+    private func configureSession() -> Bool {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
-                                                   for: .video, position: .back),
-              let input = try? AVCaptureDeviceInput(device: device) else { return }
+                                                   for: .video, position: .back)
+        else {
+            Log("[CameraModel] 未找到后置广角摄像头")
+            return false
+        }
+        guard let input = try? AVCaptureDeviceInput(device: device) else {
+            Log("[CameraModel] 无法创建 AVCaptureDeviceInput")
+            return false
+        }
         session.beginConfiguration()
-        if session.canAddInput(input) { session.addInput(input) }
-        if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
+        session.sessionPreset = .photo
+        var ok = true
+        if session.canAddInput(input) {
+            session.addInput(input)
+        } else {
+            Log("[CameraModel] 无法添加摄像输入")
+            ok = false
+        }
+        if session.canAddOutput(photoOutput) {
+            photoOutput.isHighResolutionCaptureEnabled = true
+            session.addOutput(photoOutput)
+        } else {
+            Log("[CameraModel] 无法添加照片输出")
+            ok = false
+        }
         session.commitConfiguration()
+        return ok
     }
 
     func start() { queue.async { [weak self] in self?.session.startRunning() } }
@@ -355,8 +385,11 @@ struct CameraPage: View {
     @State private var selectedServings: Int = 1
     @State private var pendingItems: [LibraryPendingItem] = []
 
-    // 从贴纸仓库异步加载的贴纸列表（取代 CardMock 硬编码）
+    // 从贴纸仓库异步加载的贴纸列表（用于合并到本地 savedStickers，不直接参与显示）
     @State private var repoStickers: [FoodSticker] = []
+
+    // 待删除的自定义贴纸（长按触发，仅自定义贴纸可删，内置 CardMock 不可删）
+    @State private var stickerToDelete: FoodSticker? = nil
 
     var body: some View {
         ZStack {
@@ -379,11 +412,19 @@ struct CameraPage: View {
                             .padding(.horizontal, CameraPageTokens.content)
                             .padding(.top, 16)
                     } else {
-                        ScrollView {
-                            librarySection
+                        // 选择已有：上方滚动区域 + 底部固定关闭按钮
+                        VStack(spacing: 0) {
+                            ScrollView {
+                                librarySection
+                                    .padding(.horizontal, CameraPageTokens.content)
+                                    .padding(.top, 16)
+                                    .padding(.bottom, 16)
+                            }
+                            libraryCloseBar
                                 .padding(.horizontal, CameraPageTokens.content)
-                                .padding(.top, 16)
-                                .padding(.bottom, 32)
+                                .padding(.top, 8)
+                                .padding(.bottom, 24)
+                                .background(CameraPageTokens.background)
                         }
                     }
                 }
@@ -414,8 +455,10 @@ struct CameraPage: View {
             }
         }
         .task {
-            // 从贴纸仓库异步加载贴纸列表（替换 CardMock 硬编码）
+            // 从贴纸仓库异步加载云端贴纸，并合并到本地 savedStickers（跨设备同步）
+            // 不直接用于显示：显示层始终 = CardMock 内置预设 + savedStickers 自定义贴纸
             repoStickers = await AppDataStore.shared.fetchStickersAsFoodStickers()
+            AppDataStore.shared.mergeCloudStickers(repoStickers)
         }
     }
 
@@ -478,7 +521,18 @@ struct CameraPage: View {
                 .onAppear { camera.start() }
                 .onDisappear { camera.stop() }
 
-            if !camera.isAuthorized {
+            if camera.isSimulator {
+                Color.black.opacity(0.55)
+                    .clipShape(RoundedRectangle(cornerRadius: CameraPageTokens.previewRadius))
+                    .overlay(
+                        VStack(spacing: 8) {
+                            Text("模拟器不支持摄像头\n请在真机上运行")
+                                .multilineTextAlignment(.center)
+                                .font(CameraPageTokens.font(CameraPageTokens.fsSm, .regular))
+                                .foregroundColor(.white)
+                        }
+                    )
+            } else if !camera.isAuthorized {
                 Color.black.opacity(0.55)
                     .clipShape(RoundedRectangle(cornerRadius: CameraPageTokens.previewRadius))
                     .overlay(
@@ -562,21 +616,38 @@ struct CameraPage: View {
             Text("选择已有食物")
                 .font(CameraPageTokens.font(CameraPageTokens.fsLg, .semibold))
                 .foregroundColor(CameraPageTokens.foreground)
-            // "选择已有"数据源 = 仓库贴纸 + 用户保存/预设的食物（按名称去重）
-            let builtIn = repoStickers.isEmpty
-                ? CardMock.stickers(for: .me)
-                : repoStickers
+            // 显示数据源 = CardMock 内置预设 + savedStickers 用户自定义（按名称去重）
+            // 内置预设始终保留，不被云端贴纸替换；自定义贴纸可在云端跨设备同步
+            let builtIn = CardMock.stickers(for: .me)
             let userItems = AppDataStore.shared.savedStickers.filter { u in
                 !builtIn.contains { $0.name == u.name }
             }
             let items = builtIn + userItems
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 12) {
             ForEach(items) { st in
+                // 自定义贴纸（recordId 非空）：右上角有删除按钮 + 长按菜单
+                // 内置预设（recordId 空）：不可删除
+                let isCustom = !st.recordId.isEmpty
                 Button { servingTarget = st; selectedServings = 1 } label: {
                     VStack(spacing: 6) {
-                        StickerImageView(sticker: st, contentMode: .fill)
-                            .frame(height: 96).frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: CameraPageTokens.rMd))
+                        ZStack(alignment: .topTrailing) {
+                            StickerImageView(sticker: st, contentMode: .fill)
+                                .frame(height: 96).frame(maxWidth: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: CameraPageTokens.rMd))
+                            if isCustom {
+                                // 显式删除按钮（×），无需长按
+                                Button {
+                                    stickerToDelete = st
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundColor(.red.opacity(0.9))
+                                        .background(Circle().fill(Color.white))
+                                        .padding(6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                         Text(st.name)
                             .font(CameraPageTokens.font(CameraPageTokens.fsSm, .medium))
                             .foregroundColor(CameraPageTokens.foreground)
@@ -586,6 +657,13 @@ struct CameraPage: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .contextMenu { if isCustom {
+                    Button(role: .destructive) {
+                        stickerToDelete = st
+                    } label: {
+                        Label("删除该预设", systemImage: "trash")
+                    }
+                } }
             }
             }
 
@@ -599,6 +677,49 @@ struct CameraPage: View {
                 pendingList
             }
         }
+        .alert("删除预设", isPresented: Binding(
+            get: { stickerToDelete != nil },
+            set: { if !$0 { stickerToDelete = nil } }
+        )) {
+            Button("取消", role: .cancel) { stickerToDelete = nil }
+            Button("删除", role: .destructive) {
+                if let st = stickerToDelete {
+                    AppDataStore.shared.deleteCustomSticker(recordId: st.recordId)
+                    // 若当前选中的贴纸被删除，清除选中状态
+                    if servingTarget?.recordId == st.recordId {
+                        servingTarget = nil
+                    }
+                    stickerToDelete = nil
+                }
+            }
+        } message: {
+            if let st = stickerToDelete {
+                Text("确定要删除「\(st.name)」吗？删除后可在拍摄后重新预设。")
+            }
+        }
+    }
+
+    // MARK: 选择已有 - 底部固定关闭按钮
+    private var libraryCloseBar: some View {
+        Button {
+            closeAction()
+        } label: {
+            HStack(spacing: 8) {
+                XIcon()
+                    .stroke(CameraPageTokens.foregroundMuted,
+                            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .frame(width: 18, height: 18)
+                Text("关闭")
+                    .font(CameraPageTokens.font(CameraPageTokens.fsBase, .medium))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Color(.systemGray5))
+            .overlay(RoundedRectangle(cornerRadius: 14)
+                .stroke(Color(.systemGray4), lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: 横向滚动份数选择条（1~5 份）
@@ -726,11 +847,25 @@ struct CameraPage: View {
         let count = pendingItems.count
         for item in pendingItems {
             let s = item.sticker
+            // 图片数据：优先用 uiImage（拍照/抠图结果），否则从 bundle 加载预设图片
+            let imgData: Data? = {
+                if let ui = s.uiImage { return ui.pngData() }
+                if !s.imageName.isEmpty { return UIImage(named: s.imageName)?.pngData() }
+                return nil
+            }()
             AppDataStore.shared.addRecord(DailyRecord(
                 type: .food,
                 name: s.name,
                 calories: s.cal * item.servings,
-                amount: Double(item.servings)))
+                amount: Double(item.servings),
+                imageData: imgData,
+                protein: s.protein,
+                carbs: s.carbs,
+                fat: s.fat,
+                fiber: s.fiber,
+                sugar: s.sugar,
+                salt: s.salt,
+                tip: s.tip))
         }
         withAnimation(.easeInOut(duration: 0.2)) {
             pendingItems.removeAll()
@@ -813,6 +948,9 @@ struct CameraPage: View {
     /// 拍摄：立即入队（灰显+识别中），再异步执行后台流水线
     private func capture() {
         guard store.canAddMore() else { showLimit = true; return }
+        guard !camera.isSimulator else {
+            showToast("模拟器不支持拍摄，请在真机上使用"); return
+        }
         guard camera.isAuthorized else {
             showToast("请先在「设置」中允许访问相机"); return
         }

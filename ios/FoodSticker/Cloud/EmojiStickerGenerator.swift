@@ -8,20 +8,6 @@ final class EmojiStickerGenerator {
 
     static let shared = EmojiStickerGenerator()
 
-    // MARK: - 兼容旧代码：FoodNutritionService 暂用的配置（待迁移到 CloudAPI）
-    /// ⚠️ 已废弃：API Key 已迁移至服务端，此处仅为 FoodNutritionService 兼容保留。
-    /// TODO: 将 FoodNutritionService 改为走 CloudAPI.shared.recognizeFood / queryNutrition
-    @available(*, deprecated, message: "API Key 已迁移至服务端，请使用 CloudAPI.shared")
-    struct Config {
-        var apiKey: String = ""
-        var baseURL: String = ""
-        var modelName: String = ""
-        var chatBaseURL: String = ""
-        var visionModelName: String = ""
-    }
-    @available(*, deprecated, message: "API Key 已迁移至服务端，请使用 CloudAPI.shared")
-    var config = Config()
-
     private init() {}
 
     // MARK: - 对外接口
@@ -46,7 +32,7 @@ final class EmojiStickerGenerator {
                 )
                 DispatchQueue.main.async { completion(sticker, nil) }
             } catch {
-                print("[EmojiSticker] ❌ 服务端代理失败: \(error.localizedDescription)")
+                Log("[EmojiSticker] ❌ 服务端代理失败: \(error.localizedDescription)")
                 DispatchQueue.main.async { completion(fallbackImage, nil) }
             }
         }

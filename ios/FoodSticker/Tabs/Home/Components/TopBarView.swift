@@ -11,7 +11,7 @@ struct TopBarView: View {
 
     var body: some View {
         HStack {
-            // 左侧：问候语 · 昵称 + 下拉箭头
+            // 左侧：问候语 · 昵称
             HStack(spacing: 6) {
                 Text(greeting)
                     .font(.app(size: HomeTokens.FontSize.greeting,
@@ -25,11 +25,6 @@ struct TopBarView: View {
                 Text(nickname)
                     .font(.app(size: HomeTokens.FontSize.body))
                     .foregroundColor(HomeTokens.Color.foregroundMuted)
-
-                Image(systemName: "chevron.down")
-                    .font(.app(size: HomeTokens.FontSize.small))
-                    .foregroundColor(HomeTokens.Color.foregroundMuted)
-                    .frame(width: 20, height: 20)
             }
 
             Spacer()

@@ -10,7 +10,7 @@ final class AuthService {
     static let shared = AuthService()
 
     /// 认证能力实现（Mock / 真实），一行切换。
-    var provider: AuthProvider = MockAuthProvider()
+    var provider: AuthProvider = CloudAuthProvider()
 
     @Published private(set) var currentUser: AuthUser?   // nil = 游客
     @Published private(set) var isLoggedIn: Bool = false
@@ -28,12 +28,6 @@ final class AuthService {
 
     // MARK: 登录入口（供 UI 调用）
 
-    func loginByOneKey() async throws -> AuthUser {
-        let user = try await provider.loginByOneKey()
-        persist(user)
-        return user
-    }
-
     func loginBySMS(phone: String, code: String) async throws -> AuthUser {
         let user = try await provider.loginBySMS(phone: phone, code: code)
         persist(user)
@@ -46,10 +40,33 @@ final class AuthService {
         return user
     }
 
-    func register(phone: String, password: String, nickname: String) async throws -> AuthUser {
-        let user = try await provider.register(phone: phone, password: password, nickname: nickname)
+    /// 发送短信验证码（短信平台就绪后启用）。返回验证码：Cloud 模式返回空串，Mock 模式返回真实验证码用于调试。
+    func sendSMSCode(phone: String) async throws -> String {
+        try await provider.sendSMSCode(phone: phone)
+    }
+
+    /// 短信验证码注册（短信平台就绪后启用）
+    func register(phone: String, code: String, password: String, nickname: String) async throws -> AuthUser {
+        let user = try await provider.register(phone: phone, code: code,
+                                                password: password, nickname: nickname)
         persist(user)
         return user
+    }
+
+    /// 账号密码注册（短信平台未就绪时的兜底注册方式）
+    /// 若账号已存在（首次注册时网络抖动导致客户端未收到成功响应，重试即 409），
+    /// 自动用同一账号密码登录，避免用户卡在「已注册」提示进不去。
+    func registerByUserID(userID: String, password: String, name: String) async throws -> AuthUser {
+        do {
+            let user = try await provider.registerByUserID(userID: userID, password: password, name: name)
+            persist(user)
+            return user
+        } catch AuthError.userIDAlreadyRegistered {
+            // 账号已存在：直接尝试登录（密码一致即可进）
+            let user = try await provider.loginByPassword(phone: userID, password: password)
+            persist(user)
+            return user
+        }
     }
 
     // MARK: 登出 / 会话
@@ -58,6 +75,10 @@ final class AuthService {
         currentUser = nil
         isLoggedIn = false
         UserDefaults.standard.removeObject(forKey: sessionKey)
+        // 清空业务数据，防止退出后下一用户看到残留数据
+        DispatchQueue.main.async {
+            AppDataStore.shared.clearAllData()
+        }
         NotificationCenter.default.post(name: .authDidChange, object: nil)
     }
 
@@ -76,6 +97,22 @@ final class AuthService {
         if let data = try? JSONEncoder().encode(user) {
             UserDefaults.standard.set(data, forKey: sessionKey)
         }
+        // 同步昵称到全站数据源（「我的」/「账户设置」读 AvatarStore，
+        // ProfileStore 用于个人中心派生数据），避免登录后仍是「游客」。
+        let name = Self.effectiveNickname(user)
+        Task { @MainActor in
+            AvatarStore.shared.saveNickname(name)
+            ProfileStore.shared.setLoggedInNickname(name)
+        }
+    }
+
+    /// 昵称为空时生成友好昵称（用户 + uid/手机号后 4 位），绝不暴露完整账号。
+    private static func effectiveNickname(_ user: AuthUser) -> String {
+        let n = user.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !n.isEmpty { return n }
+        let tail = (user.phone.count >= 4 ? String(user.phone.suffix(4))
+                    : (user.uid.count >= 4 ? String(user.uid.suffix(4)) : user.uid))
+        return "用户" + tail
     }
 
     // MARK: 游客态辅助

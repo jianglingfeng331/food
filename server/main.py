@@ -13,13 +13,18 @@ import json
 import os
 import uuid
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+# 中国标准时间（UTC+8）
+CHINA_TZ = timezone(timedelta(hours=8))
 from typing import Optional
 
 import cv2
 import httpx
 import jwt
 import numpy as np
+import sqlalchemy
+from sqlalchemy import select
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from loguru import logger
 from PIL import Image
@@ -31,8 +36,13 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import JSONResponse
 
 from db import SessionLocal, get_read_session, User, Record, Sticker, PKWeek, init_db, hash_password, verify_password
+from sms import send_code as sms_send_code, verify_code as sms_verify_code, is_valid_phone as sms_is_valid_phone
 from cache import cached, cache_invalidate, cache_get, cache_set
+from dotenv import load_dotenv
 from logging_config import setup_logging
+
+# ── 加载 .env ──
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # ── 结构化日志 ──
 setup_logging()
@@ -72,6 +82,15 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
         content={"detail": "请求过于频繁，请稍后再试"},
     )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """全局异常处理器，捕获所有未处理的异常"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"服务器内部错误: {str(exc)[:200]}"},
+    )
+
 
 # ── 请求日志中间件 ──
 @app.middleware("http")
@@ -98,15 +117,15 @@ VLM_KEY = os.getenv("VLM_API_KEY", "")
 VLM_MODEL = os.getenv("VLM_MODEL", "hunyuan-vision")
 
 # 火山方舟图生图（seedream）—— 独立配置，默认复用 VLM_BASE / VLM_API_KEY
-ARK_BASE = os.getenv("ARK_BASE_URL", VLM_BASE)
-ARK_KEY = os.getenv("ARK_API_KEY", VLM_KEY)
+ARK_BASE = os.getenv("ARK_BASE_URL") or VLM_BASE
+ARK_KEY = os.getenv("ARK_API_KEY") or VLM_KEY
 ARK_SD_MODEL = os.getenv("ARK_SD_MODEL", "doubao-seedream-4-0-251215")
 
 # ─────────────────────── 鉴权（JWT，承接原 mock 用户体系） ───────────────────────
 # 默认密钥仅用于本地开发/测试；生产务必通过 JWT_SECRET 环境变量配置至少 32 字节的随机值
 SECRET = os.getenv("JWT_SECRET", "dev-only-insecure-secret-please-override-32bytes-min")
 ALGO = "HS256"
-TARGET_KCAL = 1500  # 默认每日热量目标，后续可由用户资料覆盖
+TARGET_KCAL = 0  # 默认每日热量目标为 0（不塞假数据），由用户在资料页自行设置
 
 
 def _create_token(user_id: str) -> str:
@@ -131,13 +150,31 @@ def get_current_user(authorization: str = Header(None)) -> User:
 def _user_dict(u: User) -> dict:
     return {
         "id": u.id, "name": u.name, "avatar": u.avatar,
+        "avatar_b64": u.avatar_b64 or "",
+        "username": u.username or "",
         "currentWeight": u.current_weight, "targetWeight": u.target_weight,
         "height": u.height,
     }
 
 
-def _aggregate(s, uid: str) -> dict:
-    recs = s.query(Record).filter(Record.user_id == uid).all()
+def _cutoff_for_days(days: int) -> datetime:
+    """返回 days 过滤的截止 UTC 时间（以 UTC+8 自然天零点对齐）。
+
+    days=1 → 今天 UTC+8 零点；days=7 → 7 天前 UTC+8 零点。
+    created_at 存的是 UTC，故需将本地零点转为 UTC 后再比较。
+    """
+    now_local = datetime.now(CHINA_TZ)
+    local_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff_local = local_midnight - timedelta(days=days - 1)
+    # UTC+8 → UTC 朴素时间：减去 8 小时
+    return cutoff_local.replace(tzinfo=None) - timedelta(hours=8)
+
+
+def _aggregate(s, uid: str, days: int = 0) -> dict:
+    q = s.query(Record).filter(Record.user_id == uid)
+    if days > 0:
+        q = q.filter(Record.created_at >= _cutoff_for_days(days))
+    recs = q.all()
     intake = sum(r.calories for r in recs if r.type == "food")
     burned = sum(r.calories for r in recs if r.type == "exercise")
     target = TARGET_KCAL
@@ -147,26 +184,56 @@ def _aggregate(s, uid: str) -> dict:
     }
 
 
-def _records_list(s, uid: str) -> list:
-    return [
-        {"id": r.id, "type": r.type, "name": r.name, "calories": r.calories,
-         "amount": r.amount, "unit": r.unit, "time": r.time}
-        for r in s.query(Record).filter(Record.user_id == uid)
-        .order_by(Record.created_at.desc()).all()
-    ]
+def _records_list(s, uid: str, days: int = 0) -> list:
+    q = s.query(Record).filter(Record.user_id == uid)
+    # 可选日期过滤：仅返回最近 N 天的记录，避免全量返回（PK 接口场景下对方历史数据量可能很大）
+    if days > 0:
+        q = q.filter(Record.created_at >= _cutoff_for_days(days))
+    result = []
+    for r in q.order_by(Record.created_at.desc()).all():
+        # created_at 存的是 UTC 时间，需转 UTC+8 后输出日期，避免北京时间 0-8 点
+        # 的记录日期落后一天（例如凌晨 2 点的记录显示为昨天的日期）
+        local_dt = r.created_at.replace(tzinfo=timezone.utc).astimezone(CHINA_TZ) if r.created_at else datetime.now(CHINA_TZ)
+        rec = {"id": r.id, "type": r.type, "name": r.name, "calories": r.calories,
+               "amount": r.amount, "unit": r.unit, "time": r.time,
+               "date": local_dt.strftime("%Y-%m-%d"),
+               "protein_g": r.protein_g or 0,
+               "carb_g": r.carb_g or 0,
+               "fat_g": r.fat_g or 0,
+               "dietary_fiber_g": r.dietary_fiber_g or 0,
+               "sugar_g": r.sugar_g or 0,
+               "sodium_mg": r.sodium_mg or 0,
+               "vitamin_tips": r.vitamin_tips or ""}
+        # 食物记录附带图片（对方可借此看到拍摄/预设图片）
+        if r.type == "food" and r.image_path:
+            img_path = os.path.join(FBASE, r.image_path)
+            if os.path.exists(img_path):
+                with open(img_path, "rb") as f:
+                    rec["image_b64"] = base64.b64encode(f.read()).decode()
+        result.append(rec)
+    return result
 
 
 # ─────────────────────── 业务接口：登录 / 用户 / 仪表盘 / 记录 / PK / 贴纸 ───────────────────────
 class LoginReq(BaseModel):
     user_id: str
-    password: str = "123456"
+    password: str
+
+
+class RegisterReq(BaseModel):
+    user_id: str
+    password: str
+    name: Optional[str] = None
+    avatar: Optional[str] = None
 
 
 @app.post("/auth/login")
 @limiter.limit("5/minute")  # 防暴力破解
 def auth_login(req: LoginReq, request: Request = None):
     with SessionLocal() as s:
-        u = s.get(User, req.user_id)
+        # 账号密码体系按 username 查；手机号体系按 phone 查（id 已与登录标识解耦）
+        u = (s.query(User).filter(User.username == req.user_id).first()
+             or s.query(User).filter(User.phone == req.user_id).first())
         if not u:
             raise HTTPException(status_code=401, detail="用户名或密码错误")
 
@@ -186,14 +253,177 @@ def auth_login(req: LoginReq, request: Request = None):
         return {"token": _create_token(u.id), "user": _user_dict(u)}
 
 
+@app.post("/auth/register")
+@limiter.limit("5/minute")  # 防接口滥用
+def auth_register(req: RegisterReq, request: Request = None):
+    user_id = req.user_id.strip()
+    if not user_id or len(user_id) < 3:
+        raise HTTPException(status_code=400, detail="账号至少 3 个字符")
+    if not req.password or len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="密码至少 6 位")
+
+    with SessionLocal() as s:
+        if s.query(User).filter(User.username == user_id).first():
+            raise HTTPException(status_code=409, detail="该账号已被注册")
+        u = User(
+            id=str(uuid.uuid4()),
+            username=user_id,
+            password_hash=hash_password(req.password),
+            name=req.name or ("用户" + user_id[-4:]),
+            avatar=req.avatar or "🙂",
+        )
+        s.add(u)
+        s.commit()
+        s.refresh(u)
+        return {"token": _create_token(u.id), "user": _user_dict(u)}
+
+
 @app.get("/user/me")
 def user_me(u: User = Depends(get_current_user)):
     return _user_dict(u)
 
 
+class ChangePasswordReq(BaseModel):
+    new_password: str
+
+
+@app.post("/auth/change-password")
+@limiter.limit("10/minute")
+def auth_change_password(req: ChangePasswordReq, request: Request = None,
+                         u: User = Depends(get_current_user)):
+    """修改当前登录用户的登录密码（需鉴权）。"""
+    if not req.new_password or len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="密码至少 6 位")
+    with SessionLocal() as s:
+        cur = s.get(User, u.id)
+        cur.password_hash = hash_password(req.new_password)
+        s.commit()
+    return {"ok": True}
+
+
+@app.delete("/auth/account")
+@limiter.limit("3/minute")
+def auth_delete_account(request: Request = None,
+                        u: User = Depends(get_current_user)):
+    """删除当前登录用户的账号及全部数据（需鉴权）。
+
+    清理范围：records / stickers / pk_weeks + 解除 PK 绑定 + 删除用户本体。
+    满足 App Store 审核 5.1.1(v) 对账号删除功能的要求。
+    """
+    with SessionLocal() as s:
+        # 解除 PK 绑定（双向清空 partner_id）
+        if u.partner_id:
+            partner = s.get(User, u.partner_id)
+            if partner:
+                partner.partner_id = None
+        # 删除用户产生的全部业务数据
+        s.query(Record).filter(Record.user_id == u.id).delete()
+        s.query(Sticker).filter(Sticker.user_id == u.id).delete()
+        s.query(PKWeek).filter(PKWeek.user_id == u.id).delete()
+        s.delete(u)
+        s.commit()
+    return {"ok": True}
+
+
+# ─────────────────────── 手机号 + 短信验证码体系 ───────────────────────
+class SendCodeReq(BaseModel):
+    phone: str
+
+
+class PhoneCodeReq(BaseModel):
+    phone: str
+    code: str
+
+
+class PhoneRegisterReq(BaseModel):
+    phone: str
+    code: str
+    password: Optional[str] = None   # 可选：设置登录密码
+    nickname: Optional[str] = None
+
+
+@app.post("/auth/send-code")
+@limiter.limit("20/minute")
+def auth_send_code(req: SendCodeReq, request: Request = None):
+    """发送短信验证码（Mock 模式打印到服务端日志）。限流 + 单号日上限在 sms 层处理。"""
+    try:
+        sms_send_code(req.phone)
+    except ValueError as e:
+        if str(e) == "invalid_phone":
+            raise HTTPException(status_code=400, detail="手机号格式不正确")
+        if str(e) == "daily_limit":
+            raise HTTPException(status_code=429, detail="今日验证码发送次数已达上限")
+        if str(e) == "too_frequent":
+            raise HTTPException(status_code=429, detail="操作过于频繁，请稍后再试")
+        raise HTTPException(status_code=400, detail="发送失败")
+    return {"ok": True}
+
+
+@app.post("/auth/login-by-phone")
+@limiter.limit("10/minute")
+def auth_login_by_phone(req: PhoneCodeReq, request: Request = None):
+    """短信验证码登录：验证通过后，若手机号未注册则自动创建账号（即验即注册）。
+
+    这样登录页的验证码流程对老用户直接登录、新用户自动开通，无需二次跳转。
+    """
+    try:
+        sms_verify_code(req.phone, req.code)
+    except ValueError as e:
+        if str(e) == "code_expired":
+            raise HTTPException(status_code=400, detail="验证码已过期，请重新获取")
+        if str(e) == "wrong_code":
+            raise HTTPException(status_code=400, detail="验证码错误")
+        raise HTTPException(status_code=400, detail="验证码校验失败")
+    with SessionLocal() as s:
+        u = s.query(User).filter(User.phone == req.phone).first()
+        if not u:
+            # 自动注册（验证码已校验通过，无需重复校验）
+            u = User(id=str(uuid.uuid4()), name=f"用户{req.phone[-4:]}",
+                     avatar="🙂", phone=req.phone)
+            s.add(u)
+            s.commit()
+            s.refresh(u)
+        return {"token": _create_token(u.id), "user": _user_dict(u)}
+        return {"token": _create_token(u.id), "user": _user_dict(u)}
+
+
+@app.post("/auth/register-by-phone")
+@limiter.limit("10/minute")
+def auth_register_by_phone(req: PhoneRegisterReq, request: Request = None):
+    """手机号验证码注册：校验验证码后建号（可选设置密码），返回 token。"""
+    if not sms_is_valid_phone(req.phone):
+        raise HTTPException(status_code=400, detail="手机号格式不正确")
+    try:
+        sms_verify_code(req.phone, req.code)
+    except ValueError as e:
+        if str(e) == "code_expired":
+            raise HTTPException(status_code=400, detail="验证码已过期，请重新获取")
+        if str(e) == "wrong_code":
+            raise HTTPException(status_code=400, detail="验证码错误")
+        raise HTTPException(status_code=400, detail="验证码校验失败")
+    if req.password and len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="密码至少 6 位")
+
+    with SessionLocal() as s:
+        if s.query(User).filter(User.phone == req.phone).first():
+            raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
+        u = User(
+            id=str(uuid.uuid4()),
+            name=req.nickname or f"用户{req.phone[-4:]}",
+            avatar="🙂",
+            phone=req.phone,
+            password_hash=hash_password(req.password) if req.password else "",
+        )
+        s.add(u)
+        s.commit()
+        s.refresh(u)
+        return {"token": _create_token(u.id), "user": _user_dict(u)}
+
+
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     avatar: Optional[str] = None
+    avatar_b64: Optional[str] = None
     currentWeight: Optional[float] = None
     targetWeight: Optional[float] = None
     height: Optional[float] = None
@@ -205,6 +435,7 @@ def update_profile(body: ProfileUpdate, u: User = Depends(get_current_user)):
         cur = s.get(User, u.id)
         if body.name is not None: cur.name = body.name
         if body.avatar is not None: cur.avatar = body.avatar
+        if body.avatar_b64 is not None: cur.avatar_b64 = body.avatar_b64
         if body.currentWeight is not None: cur.current_weight = body.currentWeight
         if body.targetWeight is not None: cur.target_weight = body.targetWeight
         if body.height is not None: cur.height = body.height
@@ -212,17 +443,37 @@ def update_profile(body: ProfileUpdate, u: User = Depends(get_current_user)):
         return _user_dict(cur)
 
 
+class FeedbackReq(BaseModel):
+    content: str
+    contact: Optional[str] = None
+
+
+@app.post("/feedback")
+@limiter.limit("5/minute")
+def submit_feedback(req: FeedbackReq, request: Request = None,
+                    u: User = Depends(get_current_user)):
+    """提交意见反馈，记录到服务端日志（暂不落库）。"""
+    content = req.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="反馈内容不能为空")
+    if len(content) > 1000:
+        raise HTTPException(status_code=400, detail="反馈内容不能超过 1000 字")
+    logger.info(f"[Feedback] user={u.id} contact={req.contact or ''} content={content[:200]}")
+    return {"ok": True}
+
+
 @app.get("/dashboard")
 def dashboard(u: User = Depends(get_current_user)):
-    # 尝试 Redis 缓存（60s TTL，数据变更时自动失效）
+    # 试用 Redis 缓存（60s TTL），数据变更缓存失效；dashboard 无 day 过滤时不缓存
     cache_key = f"cache:dashboard:{u.id}"
     cached_data = cache_get(cache_key)
     if cached_data:
         return cached_data
 
     with get_read_session() as s:
-        result = {"user": _user_dict(u), "dailyStats": _aggregate(s, u.id),
-                  "todayRecords": _records_list(s, u.id)}
+        # days=7：仪表盘显示最近7天数据，让用户能看到历史记录
+        result = {"user": _user_dict(u), "dailyStats": _aggregate(s, u.id, days=7),
+                  "todayRecords": _records_list(s, u.id, days=7)}
         cache_set(cache_key, result, ttl=60)
         return result
 
@@ -234,21 +485,120 @@ class RecordIn(BaseModel):
     amount: float = 0
     unit: str = ""
     time: str = ""
+    image_b64: str = ""
+    # 可选：记录创建时间（ISO 8601 格式字符串，如 "2026-08-06T12:00:00Z"）
+    # 用于补上传历史记录时保持原始创建时间，避免误用上传时间
+    created_at: str = ""
+    # 营养成分与小贴士（食物记录携带，供对方查看详情）
+    protein_g: float = 0
+    carb_g: float = 0
+    fat_g: float = 0
+    dietary_fiber_g: float = 0
+    sugar_g: float = 0
+    sodium_mg: float = 0
+    vitamin_tips: str = ""
+
+
+def _invalidate_user_caches(s, user_id: str):
+    """使指定用户及其伴侣的 dashboard/pk 缓存失效（记录变更后调用）"""
+    cache_invalidate(f"cache:dashboard:{user_id}")
+    cache_invalidate(f"cache:pk:{user_id}")
+    partner = s.execute(select(User).where(User.partner_id == user_id)).scalar_one_or_none()
+    if partner:
+        cache_invalidate(f"cache:dashboard:{partner.id}")
+        cache_invalidate(f"cache:pk:{partner.id}")
 
 
 @app.post("/records")
 @limiter.limit("60/minute")
 def add_record(body: RecordIn, u: User = Depends(get_current_user), request: Request = None):
     with SessionLocal() as s:
+        img_path = ""
+        if body.image_b64 and body.type == "food":
+            os.makedirs(FBASE, exist_ok=True)
+            fn = f"{uuid.uuid4().hex}.jpg"
+            try:
+                raw = base64.b64decode(body.image_b64)
+                with open(os.path.join(FBASE, fn), "wb") as f:
+                    f.write(raw)
+                img_path = fn
+            except Exception:
+                logger.warning("食物图片保存失败，跳过图片")
+
+        # 饮水类型：当天只保留一条记录，新设置覆盖旧值（upsert）
+        if body.type == "water":
+            # 从 time 字段解析日期（格式 "HH:MM"，加上今天日期得到 date）
+            today = datetime.utcnow()
+            date_str = today.strftime("%Y-%m-%d")
+            # 查找当天已有的 water 记录
+            existing = s.query(Record).filter(
+                Record.user_id == u.id,
+                Record.type == "water",
+                sqlalchemy.func.DATE(Record.created_at) == today.date()
+            ).order_by(Record.created_at.desc()).first()
+            if existing:
+                # 更新已有记录
+                existing.name = body.name
+                existing.calories = body.calories
+                existing.amount = body.amount
+                existing.unit = body.unit
+                existing.time = body.time
+                s.commit()
+                _invalidate_user_caches(s, u.id)
+                return {"ok": True, "id": existing.id}
+
+        # 解析传入的 created_at（如有），用于补上传历史记录时保持原始时间
+        record_created_at = None
+        if body.created_at:
+            try:
+                # 支持 ISO 8601 格式（带或不带时区）
+                # 如 "2026-08-06T12:00:00Z" 或 "2026-08-06T12:00:00+08:00"
+                from dateutil import parser as dateutil_parser
+                parsed_dt = dateutil_parser.parse(body.created_at)
+                # 转换为 UTC（不带时区信息），与数据库存储一致
+                if parsed_dt.tzinfo is not None:
+                    record_created_at = parsed_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                else:
+                    record_created_at = parsed_dt
+            except Exception as e:
+                logger.warning(f"解析 created_at 失败: {body.created_at}, error: {e}")
+
         r = Record(id=f"r-{uuid.uuid4().hex[:10]}", user_id=u.id, type=body.type,
                    name=body.name, calories=body.calories, amount=body.amount,
-                   unit=body.unit, time=body.time)
+                   unit=body.unit, time=body.time, image_path=img_path,
+                   created_at=record_created_at,
+                   protein_g=body.protein_g, carb_g=body.carb_g, fat_g=body.fat_g,
+                   dietary_fiber_g=body.dietary_fiber_g, sugar_g=body.sugar_g,
+                   sodium_mg=body.sodium_mg, vitamin_tips=body.vitamin_tips)
         s.add(r)
         s.commit()
-        # 数据变更后使相关缓存失效
-        cache_invalidate(f"cache:dashboard:{u.id}")
-        cache_invalidate(f"cache:pk:{u.id}")
+        _invalidate_user_caches(s, u.id)
         return {"ok": True, "id": r.id}
+
+
+@app.put("/records/{rid}")
+def update_record(rid: str, body: RecordIn, u: User = Depends(get_current_user)):
+    """更新已有记录（用于饮水覆盖式更新等场景）"""
+    with SessionLocal() as s:
+        r = s.get(Record, rid)
+        if not r or r.user_id != u.id:
+            raise HTTPException(status_code=404, detail="记录不存在")
+        r.type = body.type
+        r.name = body.name
+        r.calories = body.calories
+        r.amount = body.amount
+        r.unit = body.unit
+        r.time = body.time
+        r.protein_g = body.protein_g
+        r.carb_g = body.carb_g
+        r.fat_g = body.fat_g
+        r.dietary_fiber_g = body.dietary_fiber_g
+        r.sugar_g = body.sugar_g
+        r.sodium_mg = body.sodium_mg
+        r.vitamin_tips = body.vitamin_tips
+        s.commit()
+        _invalidate_user_caches(s, u.id)
+        return {"ok": True}
 
 
 @app.delete("/records/{rid}")
@@ -258,9 +608,80 @@ def del_record(rid: str, u: User = Depends(get_current_user)):
         if r and r.user_id == u.id:
             s.delete(r)
             s.commit()
-            cache_invalidate(f"cache:dashboard:{u.id}")
-            cache_invalidate(f"cache:pk:{u.id}")
+            _invalidate_user_caches(s, u.id)
         return {"ok": True}
+
+
+# ─────────────────────── PK 绑定关系（云端落地，跨设备同步） ───────────────────────
+
+def _public_partner_info(u: Optional[User]):
+    if not u:
+        return None
+    return {
+        "uid": u.id,
+        "nickname": u.name or ("用户" + u.id[-4:]),
+        "avatar": u.avatar or "",
+    }
+
+
+class PKBindReq(BaseModel):
+    target_uid: str
+
+
+@app.post("/pk/bind")
+def pk_bind(body: PKBindReq, u: User = Depends(get_current_user)):
+    """绑定对方为 PK 伙伴（互绑，关系写入云端，跨设备同步）。"""
+    target_uid = (body.target_uid or "").strip()
+    if not target_uid:
+        raise HTTPException(status_code=400, detail="缺少 target_uid")
+    if target_uid == u.id:
+        raise HTTPException(status_code=400, detail="不能绑定自己")
+    with SessionLocal() as s:
+        me = s.get(User, u.id)
+        other = s.get(User, target_uid)
+        if not me or not other:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        if me.partner_id:
+            raise HTTPException(status_code=409, detail="你已绑定伙伴，请先解绑")
+        if other.partner_id:
+            raise HTTPException(status_code=409, detail="对方已绑定伙伴")
+        me.partner_id = other.id
+        other.partner_id = me.id
+        s.commit()
+        s.refresh(other)
+        cache_invalidate(f"cache:pk:{me.id}")
+        cache_invalidate(f"cache:pk:{other.id}")
+        return {"ok": True, "partner": _public_partner_info(other)}
+
+
+@app.post("/pk/unbind")
+def pk_unbind(u: User = Depends(get_current_user)):
+    """解除当前用户的 PK 绑定（互解）。"""
+    with SessionLocal() as s:
+        me = s.get(User, u.id)
+        if me and me.partner_id:
+            other = s.get(User, me.partner_id)
+            if other:
+                other.partner_id = None
+                s.add(other)
+                cache_invalidate(f"cache:pk:{other.id}")
+            me.partner_id = None
+            s.add(me)
+            s.commit()
+            cache_invalidate(f"cache:pk:{me.id}")
+        return {"ok": True}
+
+
+@app.get("/pk/relation")
+def pk_relation(u: User = Depends(get_current_user)):
+    """返回当前绑定关系（云端查询，跨设备同步）。"""
+    with SessionLocal() as s:
+        me = s.get(User, u.id)
+        partner = s.get(User, me.partner_id) if me and me.partner_id else None
+        return {
+            "bound": partner is not None,
+            "partner": _public_partner_info(partner),
+        }
 
 
 @app.get("/pk/week")
@@ -273,12 +694,14 @@ def pk_week(u: User = Depends(get_current_user)):
     with get_read_session() as s:
         wk = s.query(PKWeek).filter(PKWeek.user_id == u.id).first()
         partner = s.get(User, u.partner_id) if u.partner_id else None
-        me = {"user": _user_dict(u), "dailyStats": _aggregate(s, u.id),
-              "todayRecords": _records_list(s, u.id)}
+        # dailyStats 按 7 天聚合（PK 对比按周）；todayRecords 取 30 天，
+        # 覆盖 CardPageView 周历过去 4 周（28 天）的查看范围
+        me = {"user": _user_dict(u), "dailyStats": _aggregate(s, u.id, days=7),
+              "todayRecords": _records_list(s, u.id, days=30)}
         pa = None
         if partner:
-            pa = {"user": _user_dict(partner), "dailyStats": _aggregate(s, partner.id),
-                  "todayRecords": _records_list(s, partner.id)}
+            pa = {"user": _user_dict(partner), "dailyStats": _aggregate(s, partner.id, days=7),
+                  "todayRecords": _records_list(s, partner.id, days=30)}
         result = {"startDate": wk.start_date if wk else "", "days": wk.days if wk else 0,
                   "me": me, "partner": pa}
         cache_set(cache_key, result, ttl=60)
@@ -286,6 +709,7 @@ def pk_week(u: User = Depends(get_current_user)):
 
 
 SBASE = os.getenv("STICKER_DIR", os.path.join(os.path.dirname(__file__), "stickers"))
+FBASE = os.getenv("FOOD_IMAGES_DIR", os.path.join(os.path.dirname(__file__), "food_images"))
 
 
 def _save_sticker_png(b64_str: str) -> str:
@@ -322,6 +746,15 @@ def _sticker_url(path: str) -> dict:
 class StickerIn(BaseModel):
     name: str = ""
     image_b64: str = ""
+    # 营养/贴士字段（多设备同步）
+    kcal_per_100g: float = 0
+    protein_g: float = 0
+    carb_g: float = 0
+    fat_g: float = 0
+    dietary_fiber_g: float = 0
+    sodium_mg: float = 0
+    typical_portion_g: float = 0
+    vitamin_tips: str = ""
 
 
 @app.post("/stickers")
@@ -331,7 +764,15 @@ def add_sticker(body: StickerIn, u: User = Depends(get_current_user), request: R
         # 新贴纸存文件系统
         path = _save_sticker_png(body.image_b64) if body.image_b64 else ""
         st = Sticker(id=f"s-{uuid.uuid4().hex[:10]}", user_id=u.id,
-                     name=body.name, image_b64="", image_path=path)
+                     name=body.name, image_b64="", image_path=path,
+                     kcal_per_100g=body.kcal_per_100g,
+                     protein_g=body.protein_g,
+                     carb_g=body.carb_g,
+                     fat_g=body.fat_g,
+                     dietary_fiber_g=body.dietary_fiber_g,
+                     sodium_mg=body.sodium_mg,
+                     typical_portion_g=body.typical_portion_g,
+                     vitamin_tips=body.vitamin_tips)
         s.add(st)
         s.commit()
         # 贴纸变更后使缓存失效
@@ -355,7 +796,15 @@ def list_stickers(u: User = Depends(get_current_user)):
             b64 = sticker_data.get("base64", "")
             if not b64 and x.image_b64:
                 b64 = x.image_b64  # 兼容旧数据
-            item = {"id": x.id, "name": x.name, "image_b64": b64}
+            item = {"id": x.id, "name": x.name, "image_b64": b64,
+                    "kcal_per_100g": x.kcal_per_100g or 0,
+                    "protein_g": x.protein_g or 0,
+                    "carb_g": x.carb_g or 0,
+                    "fat_g": x.fat_g or 0,
+                    "dietary_fiber_g": x.dietary_fiber_g or 0,
+                    "sodium_mg": x.sodium_mg or 0,
+                    "typical_portion_g": x.typical_portion_g or 0,
+                    "vitamin_tips": x.vitamin_tips or ""}
             if sticker_data.get("url"):
                 item["cdn_url"] = sticker_data["url"]
             result.append(item)
@@ -414,10 +863,17 @@ async def sticker_hd(req: HDReq, request: Request = None):
             "guidance_start": 0.0, "guidance_end": 0.9,
         }]}},
     }
-    async with httpx.AsyncClient(timeout=30) as cli:
-        r = await cli.post(f"{SD_BASE}/sdapi/v1/img2img", json=payload)
-        r.raise_for_status()
-        gen = Image.open(io.BytesIO(base64.b64decode(r.json()["images"][0]))).convert("RGB")
+    try:
+        async with httpx.AsyncClient(timeout=30) as cli:
+            r = await cli.post(f"{SD_BASE}/sdapi/v1/img2img", json=payload)
+            r.raise_for_status()
+            gen = Image.open(io.BytesIO(base64.b64decode(r.json()["images"][0]))).convert("RGB")
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502, detail="SD 服务未启动，贴纸生成暂不可用")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="SD 生成超时，请稍后重试")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"SD 调用失败: {str(e)[:200]}")
 
     # 3. 后处理：复用原Alpha做膨胀，抠掉白底 → 透明底 + 白模切描边保留
     a = np.array(alpha.resize(gen.size, Image.BILINEAR))
@@ -439,30 +895,39 @@ VLM_SYS = (
     "你是食品营养分析助手。识别图片中的食品，估算画面中的分量，"
     "并给出每100g的核心营养数据（依据中国食物成分表）。"
     '只输出JSON：{"name_cn":食品中文名,"portion_g":画面分量克数,'
-    '"kcal_100g":每100g千卡,"protein_g":蛋白质克,"carb_g":碳水克,"fat_g":脂肪克}'
+    '"kcal_100g":每100g千卡,"protein_g":蛋白质克,"carb_g":碳水克,"fat_g":脂肪克,'
+    '"dietary_fiber":膳食纤维克,"sodium_mg":钠毫克,'
+    '"vitamin_tips":"一句健康小贴士（不要emoji、不要markdown）"}'
 )
 
 
 @app.post("/food/recognize")
 @limiter.limit("20/minute")
 async def food_recognize(req: RecognizeReq, request: Request = None):
-    body = {
-        "model": VLM_MODEL,
-        "messages": [
-            {"role": "system", "content": VLM_SYS},
-            {"role": "user", "content": [
-                {"type": "image_url",
-                 "image_url": {"url": f"data:image/jpeg;base64,{req.image_b64}"}},
-                {"type": "text", "text": "识别这个食品并返回营养JSON"}]},
-        ],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.1,
-    }
-    async with httpx.AsyncClient(timeout=15) as cli:
-        r = await cli.post(f"{VLM_BASE}/chat/completions", json=body,
-                           headers={"Authorization": f"Bearer {VLM_KEY}"})
-        r.raise_for_status()
-        return json.loads(r.json()["choices"][0]["message"]["content"])
+    import traceback
+    try:
+        body = {
+            "model": VLM_MODEL,
+            "messages": [
+                {"role": "system", "content": VLM_SYS},
+                {"role": "user", "content": [
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/jpeg;base64,{req.image_b64}"}},
+                    {"type": "text", "text": "识别这个食品并返回营养JSON"}]},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1,
+        }
+        async with httpx.AsyncClient(timeout=60) as cli:
+            r = await cli.post(f"{VLM_BASE}/chat/completions", json=body,
+                               headers={"Authorization": f"Bearer {VLM_KEY}"})
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"]
+            print(f"[food_recognize] VLM raw: {content[:500]}")
+            return json.loads(content)
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="food_recognize 内部错误")
 
 
 # ─────────────────────── /food/nutrition ───────────────────────
@@ -473,21 +938,30 @@ class NutritionReq(BaseModel):
 @app.post("/food/nutrition")
 @limiter.limit("30/minute")
 async def food_nutrition(req: NutritionReq, request: Request = None):
-    body = {
-        "model": VLM_MODEL,
-        "messages": [
-            {"role": "system", "content":
-                '依据中国食物成分表返回食品每100g营养JSON：'
-                '{"name_cn":...,"kcal_100g":...,"protein_g":...,"carb_g":...,"fat_g":...}'},
-            {"role": "user", "content": req.name}],
-        "response_format": {"type": "json_object"},
-        "temperature": 0,
-    }
-    async with httpx.AsyncClient(timeout=10) as cli:
-        r = await cli.post(f"{VLM_BASE}/chat/completions", json=body,
-                           headers={"Authorization": f"Bearer {VLM_KEY}"})
-        r.raise_for_status()
-        return json.loads(r.json()["choices"][0]["message"]["content"])
+    import traceback
+    try:
+        body = {
+            "model": VLM_MODEL,
+            "messages": [
+                {"role": "system", "content":
+                    '依据中国食物成分表返回食品每100g营养JSON：'
+                    '{"name_cn":...,"kcal_100g":...,"protein_g":...,"carb_g":...,"fat_g":...,'
+                    '"dietary_fiber":...,"sodium_mg":...,'
+                    '"vitamin_tips":"一句健康小贴士（不要emoji、不要markdown）"}'},
+                {"role": "user", "content": req.name}],
+            "response_format": {"type": "json_object"},
+            "temperature": 0,
+        }
+        async with httpx.AsyncClient(timeout=30) as cli:
+            r = await cli.post(f"{VLM_BASE}/chat/completions", json=body,
+                               headers={"Authorization": f"Bearer {VLM_KEY}"})
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"]
+            print(f"[food_nutrition] VLM raw: {content[:300]}")
+            return json.loads(content)
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"food_nutrition 内部错误")
 
 
 # ─────────────────────── /sticker/seedream ───────────────────────

@@ -805,3 +805,54 @@ public struct LogInIcon: Shape {
         return path.applying(CGAffineTransform(scaleX: scale, y: scale))
     }
 }
+
+// MARK: - message-square (MessageSquareIcon) — 意见反馈
+
+/// lucide-react: message-square | viewBox: 0 0 24 24 | stroke-width: 2
+/// path: M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z
+public struct MessageSquareIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // 气泡主体：M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z
+        path.move(to: CGPoint(x: 21, y: 15))
+        path.addArc(center: CGPoint(x: 19, y: 15), radius: 2,
+                    startAngle: Angle(radians: 0),
+                    endAngle: Angle(radians: CGFloat.pi / 2),
+                    clockwise: false)
+        path.addLine(to: CGPoint(x: 7, y: 17))
+        path.addLine(to: CGPoint(x: 3, y: 21))
+        path.addLine(to: CGPoint(x: 3, y: 5))
+        path.addArc(center: CGPoint(x: 5, y: 5), radius: 2,
+                    startAngle: Angle(radians: CGFloat.pi),
+                    endAngle: Angle(radians: -CGFloat.pi / 2),
+                    clockwise: true)
+        path.addLine(to: CGPoint(x: 19, y: 3))
+        path.addArc(center: CGPoint(x: 19, y: 5), radius: 2,
+                    startAngle: Angle(radians: -CGFloat.pi / 2),
+                    endAngle: Angle(radians: 0),
+                    clockwise: false)
+        path.closeSubpath()
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}
+
+// MARK: - info (InfoIcon) — 关于我们
+
+/// lucide-react: info | viewBox: 0 0 24 24 | stroke-width: 2
+/// circle cx=12 cy=12 r=10 / line x1=12 y1=16 x2=12 y2=12 / line x1=12 y1=8 x2=12.01 y2=8
+public struct InfoIcon: Shape {
+    public func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        var path = Path()
+        // 外圆
+        path.addEllipse(in: CGRect(x: 2, y: 2, width: 20, height: 20))
+        // 竖线（下半段）
+        path.move(to: CGPoint(x: 12, y: 16))
+        path.addLine(to: CGPoint(x: 12, y: 12))
+        // 圆点（顶部）
+        path.move(to: CGPoint(x: 12, y: 8))
+        path.addLine(to: CGPoint(x: 12.01, y: 8))
+        return path.applying(CGAffineTransform(scaleX: scale, y: scale))
+    }
+}

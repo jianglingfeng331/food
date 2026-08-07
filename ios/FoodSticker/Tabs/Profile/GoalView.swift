@@ -217,6 +217,22 @@ struct GoalValueSheet: View {
         store.saveGoals()
     }
 
+    /// 使用整数步进生成选项值，避免 stride(by: 0.5) 的浮点精度漂移
+    private var pickerValues: [Double] {
+        if stepValue == 1 {
+            return Array(stride(from: Int(minValue), through: Int(maxValue), by: 1)).map(Double.init)
+        }
+        // stepValue == 0.5：对 min/max 乘以 2 后用整数 stride，再映射回 Double
+        let from = Int(minValue * 2)
+        let through = Int(maxValue * 2)
+        return Array(stride(from: from, through: through, by: 1)).map { Double($0) * 0.5 }
+    }
+
+    /// 将未设置的初始值（0）对齐到滚轮最小值，确保 selection 绑定始终在可选范围内
+    private var safeInitialValue: Double {
+        currentValue > 0 ? currentValue : minValue
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // 顶栏
@@ -241,7 +257,7 @@ struct GoalValueSheet: View {
 
             // 滚轮选择
             Picker(selection: $value, label: Text(titleText)) {
-                ForEach(Array(stride(from: minValue, through: maxValue, by: stepValue)), id: \.self) { v in
+                ForEach(pickerValues, id: \.self) { v in
                     Text(String(format: stepValue >= 1 ? "%.0f" : "%.1f", v))
                         .font(.app(size: 18))
                 }
@@ -255,7 +271,7 @@ struct GoalValueSheet: View {
                 .padding(.bottom, 20)
         }
         .background(CardTokens.Color.background.ignoresSafeArea())
-        .onAppear { value = currentValue }
+        .onAppear { value = safeInitialValue }
     }
 }
 

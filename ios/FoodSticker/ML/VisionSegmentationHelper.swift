@@ -44,19 +44,19 @@ final class VisionSegmentationHelper {
 
             // ① Vision 原生（iOS 17+）
             if let visionCut = self._segmentVision(image, roi: roiRect) {
-                print("[Segment] ✅ Vision 原生抠图成功")
+                Log("[Segment] ✅ Vision 原生抠图成功")
                 DispatchQueue.main.async { completion(visionCut) }
                 return
             }
 
             // ② MobileSAM 端侧兜底（iOS 16+）
             if let samCut = self._segmentWithMobileSAM(image) {
-                print("[Segment] ✅ MobileSAM 抠图成功（Vision 不可用）")
+                Log("[Segment] ✅ MobileSAM 抠图成功（Vision 不可用）")
                 DispatchQueue.main.async { completion(samCut) }
                 return
             }
 
-            print("[Segment] ⚠️ Vision 与 MobileSAM 均失败")
+            Log("[Segment] ⚠️ Vision 与 MobileSAM 均失败")
             DispatchQueue.main.async { completion(nil) }
         }
     }
@@ -134,10 +134,10 @@ final class VisionSegmentationHelper {
         }
 
         if #available(iOS 17.0, *) {
-            print("[Vision] 进入原生分割分支，系统版本 \(UIDevice.current.systemVersion)，输入 \(workCG.width)×\(workCG.height)")
+            Log("[Vision] 进入原生分割分支，系统版本 \(UIDevice.current.systemVersion)，输入 \(workCG.width)×\(workCG.height)")
             return segmentNative(workCG, roi: roi)
         }
-        print("[Vision] 系统 < iOS 17.0（当前 \(UIDevice.current.systemVersion)），跳过原生分割，将回退 MobileSAM")
+        Log("[Vision] 系统 < iOS 17.0（当前 \(UIDevice.current.systemVersion)），跳过原生分割，将回退 MobileSAM")
         return nil
     }
 
@@ -153,7 +153,7 @@ final class VisionSegmentationHelper {
                 let tier = DeviceTier.detect()
                 loaded = try await MattingEngine.load(tier: tier)
             } catch {
-                print("⚠️ MobileSAM 加载失败：\(error.localizedDescription)")
+                Log("⚠️ MobileSAM 加载失败：\(error.localizedDescription)")
             }
             semaphore.signal()
         }
@@ -178,7 +178,7 @@ final class VisionSegmentationHelper {
             guard let cutoutCG = ctx.createCGImage(out, from: out.extent) else { return nil }
             return UIImage(cgImage: cutoutCG)
         } catch {
-            print("⚠️ MobileSAM 分割失败：\(error.localizedDescription)")
+            Log("⚠️ MobileSAM 分割失败：\(error.localizedDescription)")
             return nil
         }
     }
@@ -193,14 +193,14 @@ final class VisionSegmentationHelper {
         }
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
         do { try handler.perform([request]) } catch {
-            print("⚠️ [Vision] perform 抛错（设备可能无 Neural Engine 支持）：\(error)")
+            Log("⚠️ [Vision] perform 抛错（设备可能无 Neural Engine 支持）：\(error)")
             return nil
         }
 
         let results = request.results ?? []
-        print("[Vision] request.results.count = \(results.count)")
+        Log("[Vision] request.results.count = \(results.count)")
         guard let obs = results.first else {
-            print("⚠️ [Vision] 未取到 VNInstanceMaskObservation（Vision 认为图像中无明显前景实例，返回空）")
+            Log("⚠️ [Vision] 未取到 VNInstanceMaskObservation（Vision 认为图像中无明显前景实例，返回空）")
             return nil
         }
 
@@ -208,9 +208,9 @@ final class VisionSegmentationHelper {
         // 注：当前 SDK 未暴露按面积排序的实例框接口，故直接合并所有实例；
         // 如需「仅最大主体」，可在支持 instanceBoundingBoxes 的 SDK 中按面积筛选后传入 forInstances。
         let instances = obs.allInstances
-        print("[Vision] 前景实例数 = \(instances.count)")
+        Log("[Vision] 前景实例数 = \(instances.count)")
         guard !instances.isEmpty else {
-            print("⚠️ [Vision] allInstances 为空，无可用前景实例")
+            Log("⚠️ [Vision] allInstances 为空，无可用前景实例")
             return nil
         }
 
@@ -218,7 +218,7 @@ final class VisionSegmentationHelper {
         do {
             maskBuffer = try obs.generateScaledMaskForImage(forInstances: instances, from: handler)
         } catch {
-            print("⚠️ [Vision] 生成蒙版失败：\(error)")
+            Log("⚠️ [Vision] 生成蒙版失败：\(error)")
             return nil
         }
         return composite(cg, maskBuffer: maskBuffer)
@@ -241,7 +241,7 @@ final class VisionSegmentationHelper {
             kCIInputMaskImageKey: maskAlpha
         ])
         guard let outCG = ciContext.createCGImage(out, from: fg.extent) else {
-            print("⚠️ [Vision] composite 生成 CGImage 失败")
+            Log("⚠️ [Vision] composite 生成 CGImage 失败")
             return nil
         }
         return UIImage(cgImage: outCG)

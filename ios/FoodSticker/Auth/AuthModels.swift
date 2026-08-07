@@ -13,7 +13,6 @@ struct AuthUser: Identifiable, Codable, Equatable {
     var loginType: LoginType
 
     enum LoginType: String, Codable {
-        case oneKey    = "onekey"     // 本机号码一键登录（运营商）
         case sms       = "sms"        // 短信验证码登录
         case password  = "password"   // 账号密码登录
         case register  = "register"   // 注册新账号
@@ -22,7 +21,7 @@ struct AuthUser: Identifiable, Codable, Equatable {
     var isGuest: Bool { false }
 
     static let guest = AuthUser(
-        uid: "guest", phone: "", nickname: "游客", avatar: "🚶", loginType: .oneKey)
+        uid: "guest", phone: "", nickname: "游客", avatar: "🚶", loginType: .password)
 }
 
 // MARK: - 认证能力抽象（可插拔：Mock ↔ 真实运营商/短信）
@@ -42,11 +41,12 @@ protocol AuthProvider {
     /// 账号密码登录
     func loginByPassword(phone: String, password: String) async throws -> AuthUser
 
-    /// 本机号码一键登录（Mock：模拟运营商授权弹窗返回脱敏号；真实：对接运营商 SDK）
-    func loginByOneKey() async throws -> AuthUser
+    /// 注册新账号（需短信验证码校验）
+    func register(phone: String, code: String, password: String, nickname: String) async throws -> AuthUser
 
-    /// 注册新账号
-    func register(phone: String, password: String, nickname: String) async throws -> AuthUser
+    /// 账号密码注册（短信平台未就绪时的兜底注册方式）：
+    /// 用 user_id（手机号或其他账号）+ 自设密码 + 昵称直接建号，不经过短信。
+    func registerByUserID(userID: String, password: String, name: String) async throws -> AuthUser
 }
 
 // MARK: - 认证错误
@@ -59,6 +59,7 @@ enum AuthError: LocalizedError {
     case wrongPassword
     case phoneAlreadyRegistered
     case weakPassword
+    case userIDAlreadyRegistered
     case unknown(String)
 
     var errorDescription: String? {
@@ -70,6 +71,7 @@ enum AuthError: LocalizedError {
         case .wrongPassword:           return "密码错误，请重试"
         case .phoneAlreadyRegistered:  return "该手机号已注册，请直接登录"
         case .weakPassword:            return "密码至少 6 位"
+        case .userIDAlreadyRegistered: return "该账号已被注册，请直接登录或更换账号"
         case .unknown(let m):          return m
         }
     }

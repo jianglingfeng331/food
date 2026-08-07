@@ -1,328 +1,940 @@
 import UIKit
 
-// MARK: - 登录入口（首屏：本机号码一键登录为主）
+// MARK: - 设计常量（Auth 模块共享）
+let AppPrimary   = UIColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1)
+let AppBg        = UIColor(red: 248/255, green: 248/255, blue: 248/255, alpha: 1)
+let AppBackground = AppBg   // 兼容 RegisterViewController 旧引用
+let AppText      = UIColor(red: 26/255,  green: 26/255,  blue: 26/255,  alpha: 1)
+let AppGray      = UIColor(red: 238/255, green: 238/255, blue: 238/255, alpha: 1)
+let AppTextLight = UIColor(red: 153/255, green: 153/255, blue: 153/255, alpha: 1)
+
+// MARK: - 登录入口（欢迎页 → 手机号 → 验证码 三页式流程）
 //
-// 设计规范：主色 #10B981；背景 #F8F8F8；文字深色；图标使用 SF Symbol（非 emoji）。
-
-/// 项目主色（与 SwiftUI 端 CardTokens.Color.primary 一致）
-let AppPrimary = UIColor(red: 16/255, green: 185/255, blue: 129/255, alpha: 1)
-let AppBackground = UIColor(red: 248/255, green: 248/255, blue: 248/255, alpha: 1)
-let AppText = UIColor(red: 26/255, green: 26/255, blue: 26/255, alpha: 1)
-
+// 设计参考：
+//   页0：App Logo + 协议勾选 + "手机账号登录" 主按钮
+//   页1：返回箭头 + "输入手机号" + +86/手机号输入框 + "发送验证码" 主按钮
+//   页2：返回箭头 + "输入验证码" + 6位方框 + 倒计时重发 + "下一步" 主按钮
+//
 final class AuthGateViewController: UIViewController {
 
     var onLogin: (() -> Void)?
 
-    private let logoView = UIImageView()
-    private let titleLabel = UILabel()
-    private let subtitleLabel = UILabel()
-
-    // 一键登录主按钮
-    private let oneKeyButton = UIButton(type: .system)
-    private let oneKeyTitleLabel = UILabel()
-    private let maskedPhoneLabel = UILabel()
-
-    // 其他登录方式
-    private let otherToggle = UIButton(type: .system)
-    private let otherContainer = UIView()
-    private let phoneField = UITextField()
-    private let smsField = UITextField()
-    private let passwordField = UITextField()
-    private let getCodeButton = UIButton(type: .system)
-    private let segment = UISegmentedControl(items: ["验证码登录", "密码登录"])
-    private let otherLoginButton = UIButton(type: .system)
-    private let otherTip = UILabel()
-
-    private let registerButton = UIButton(type: .system)
-    private let closeButton = UIButton(type: .system)
-    private let toastLabel = UILabel()
-
-    private var showingOther = false
+    // MARK: - State
+    private var currentPhone: String = ""
+    private var currentCode:  String = ""
     private var countdown = 0
     private var timer: Timer?
+    private var isAgreed = false
+    private var isVerifying = false
 
+    // MARK: - 页0：欢迎
+    private let welcomePage = UIView()
+    private let logoLbl     = UILabel()
+    private let agreeBtn    = UIButton(type: .custom)
+    private let agreeLbl    = UILabel()
+    private let loginBtn    = UIButton(type: .system)
+    private let accountLoginBtn = UIButton(type: .system)
+    private let registerBtn = UIButton(type: .system)
+
+    // MARK: - 页1：手机号
+    private let phonePage   = UIView()
+    private let backBtn     = UIButton(type: .system)
+    private let phoneTitle  = UILabel()
+    private let countryBox  = UIView()
+    private let countryLbl  = UILabel()
+    private let phoneBox    = UIView()
+    private let phoneField  = UITextField()
+    private let sendBtn     = UIButton(type: .system)
+
+    // MARK: - 页2：验证码
+    private let codePage    = UIView()
+    private let codeBackBtn = UIButton(type: .system)
+    private let codeTitle   = UILabel()
+    private let codeStack   = UIStackView()
+    private var codeBoxes: [UILabel] = []
+    private let hiddenField = UITextField()
+    private let resendBtn   = UIButton(type: .system)
+    private let nextBtn     = UIButton(type: .system)
+
+    // MARK: - 页3：账号密码登录（短信平台未就绪时的兜底登录方式）
+    private let pwdPage      = UIView()
+    private let pwdBackBtn   = UIButton(type: .system)
+    private let pwdTitle     = UILabel()
+    private let pwdPhoneBox  = UIView()
+    private let pwdPhoneField = UITextField()
+    private let pwdBox       = UIView()
+    private let pwdField     = UITextField()
+    private let pwdLoginBtn  = UIButton(type: .system)
+    private var pwdLoginBottomConstraint: NSLayoutConstraint?
+
+    // 页1 上的「使用密码登录」入口（独立于上方主按钮，避免复用同一实例导致约束/点击异常）
+    private let pwdEntryBtn  = UIButton(type: .system)
+
+    // MARK: - 键盘适配
+    private var sendBtnBottomConstraint: NSLayoutConstraint?
+    private var nextBtnBottomConstraint: NSLayoutConstraint?
+    private var keyboardHeight: CGFloat = 0
+
+    // MARK: - 通用
+    private let toastLbl = UILabel()
+
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = AppBackground
-        setupUI()
-        refreshMaskedPhone()
+        view.backgroundColor = AppBg
+        // 强制浅色：Auth 模块整套视觉（背景、占位、键盘）
+        // 都按浅色设计的，避免 Dark Mode 下出现黑框/灰字等异常。
+        view.overrideUserInterfaceStyle = .light
+        setupWelcomePage()
+        setupPhonePage()
+        setupCodePage()
+        setupPwdPage()
+        setupToast()
+        observeKeyboard()
+        observeMockCode()
+        navigationController?.setNavigationBarHidden(true, animated: false)
+        showWelcomePage()
     }
 
-    deinit { timer?.invalidate() }
-
-    // MARK: UI
-
-    private func setupUI() {
-        // 品牌图标（SF Symbol，非 emoji）
-        let cfg = UIImage.SymbolConfiguration(pointSize: 52, weight: .medium)
-        logoView.image = UIImage(systemName: "fork.knife", withConfiguration: cfg)
-        logoView.tintColor = AppPrimary
-        logoView.contentMode = .scaleAspectFit
-
-        titleLabel.text = "FoodSticker"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
-        titleLabel.textColor = AppText
-        titleLabel.textAlignment = .center
-        subtitleLabel.text = "记录每一餐，和朋友来一场贴纸 PK"
-        subtitleLabel.font = .systemFont(ofSize: 15)
-        subtitleLabel.textColor = AppText
-        subtitleLabel.textAlignment = .center
-
-        // 一键登录主按钮（突出）
-        oneKeyButton.backgroundColor = AppPrimary
-        oneKeyButton.layer.cornerRadius = 14
-        oneKeyButton.setTitleColor(.white, for: .normal)
-        // 不通过 setTitle 设置文字，避免和内部自定义 stack 重叠
-        oneKeyButton.setTitle("", for: .normal)
-        oneKeyButton.addTarget(self, action: #selector(oneKeyTapped), for: .touchUpInside)
-
-        oneKeyTitleLabel.text = "本机号码一键登录"
-        oneKeyTitleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        oneKeyTitleLabel.textColor = .white
-        oneKeyTitleLabel.textAlignment = .center
-
-        let stack = UIStackView(arrangedSubviews: [oneKeyTitleLabel, maskedPhoneLabel])
-        stack.axis = .vertical
-        stack.spacing = 2
-        stack.alignment = .center
-        oneKeyButton.addSubview(stack)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: oneKeyButton.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: oneKeyButton.centerYAnchor)
-        ])
-
-        // 其他登录方式切换
-        otherToggle.setTitle("其他登录方式 ▾", for: .normal)
-        otherToggle.setTitleColor(AppText, for: .normal)
-        otherToggle.addTarget(self, action: #selector(toggleOther), for: .touchUpInside)
-
-        buildOtherContainer()
-
-        registerButton.setTitle("注册新账号", for: .normal)
-        registerButton.setTitleColor(AppPrimary, for: .normal)
-        registerButton.addTarget(self, action: #selector(goRegister), for: .touchUpInside)
-
-        closeButton.setTitle("稍后再说", for: .normal)
-        closeButton.setTitleColor(AppText, for: .normal)
-        closeButton.addTarget(self, action: #selector(skip), for: .touchUpInside)
-
-        toastLabel.textAlignment = .center
-        toastLabel.textColor = .systemRed
-        toastLabel.font = .systemFont(ofSize: 13)
-        toastLabel.isHidden = true
-
-        let vstack = UIStackView(arrangedSubviews: [logoView, titleLabel, subtitleLabel,
-                                                     oneKeyButton, otherToggle, otherContainer,
-                                                     registerButton, toastLabel])
-        vstack.axis = .vertical
-        vstack.spacing = 24
-        vstack.alignment = .fill
-        vstack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(vstack)
-        NSLayoutConstraint.activate([
-            vstack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 60),
-            vstack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
-            vstack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32)
-        ])
-
-        view.addSubview(closeButton)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            closeButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            closeButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
-        ])
-
-        // 一键登录按钮高度
-        oneKeyButton.heightAnchor.constraint(equalToConstant: 84).isActive = true
-        otherContainer.isHidden = true
+    deinit {
+        timer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
 
-    private func buildOtherContainer() {
-        phoneField.placeholder = "手机号"
+    // MARK: - 页0 布局（欢迎页）
+    private func setupWelcomePage() {
+        welcomePage.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(welcomePage)
+        NSLayoutConstraint.activate([
+            welcomePage.topAnchor.constraint(equalTo: view.topAnchor),
+            welcomePage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            welcomePage.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            welcomePage.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        // Logo / App 名称
+        logoLbl.text = "FitFood PK"
+        logoLbl.font = .systemFont(ofSize: 42, weight: .black)
+        logoLbl.textColor = AppText
+        logoLbl.textAlignment = .center
+
+        // 勾选按钮
+        agreeBtn.setImage(UIImage(systemName: "circle"), for: .normal)
+        agreeBtn.setImage(UIImage(systemName: "checkmark.circle.fill"), for: .selected)
+        agreeBtn.tintColor = AppTextLight
+        agreeBtn.addTarget(self, action: #selector(didTapAgree), for: .touchUpInside)
+
+        // 协议文字（富文本，带可点击链接）
+        let fullText = "我已阅读并同意 用户协议 和 隐私政策"
+        let attributed = NSMutableAttributedString(string: fullText)
+        let normalAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 13),
+            .foregroundColor: AppTextLight
+        ]
+        let linkAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 13),
+            .foregroundColor: UIColor.systemBlue
+        ]
+        attributed.addAttributes(normalAttrs, range: NSRange(location: 0, length: fullText.utf16.count))
+        if let range1 = fullText.range(of: "用户协议") {
+            let nsRange1 = NSRange(range1, in: fullText)
+            attributed.addAttributes(linkAttrs, range: nsRange1)
+        }
+        if let range2 = fullText.range(of: "隐私政策") {
+            let nsRange2 = NSRange(range2, in: fullText)
+            attributed.addAttributes(linkAttrs, range: nsRange2)
+        }
+        agreeLbl.attributedText = attributed
+        agreeLbl.isUserInteractionEnabled = true
+        let tapAgree = UITapGestureRecognizer(target: self, action: #selector(didTapAgreeLabel(_:)))
+        agreeLbl.addGestureRecognizer(tapAgree)
+
+        // 登录按钮（主）：手机账号登录（短信验证码）
+        loginBtn.setTitle("手机账号登录", for: .normal)
+        loginBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        loginBtn.setTitleColor(.white, for: .normal)
+        loginBtn.backgroundColor = AppText
+        loginBtn.layer.cornerRadius = 28
+        loginBtn.addTarget(self, action: #selector(didTapLoginEntry), for: .touchUpInside)
+
+        // 账号登录（次）：短信平台未就绪时的兜底登录方式
+        accountLoginBtn.setTitle("账号登录", for: .normal)
+        accountLoginBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        accountLoginBtn.setTitleColor(AppText, for: .normal)
+        accountLoginBtn.backgroundColor = .clear
+        accountLoginBtn.layer.cornerRadius = 28
+        accountLoginBtn.layer.borderWidth = 1.5
+        accountLoginBtn.layer.borderColor = AppText.cgColor
+        accountLoginBtn.addTarget(self, action: #selector(didTapPwdLogin), for: .touchUpInside)
+
+        // 马上注册（底部）
+        registerBtn.setTitle("马上注册", for: .normal)
+        registerBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        registerBtn.setTitleColor(AppText, for: .normal)
+        registerBtn.backgroundColor = .clear
+        registerBtn.layer.cornerRadius = 28
+        registerBtn.layer.borderWidth = 1.5
+        registerBtn.layer.borderColor = AppText.cgColor
+        registerBtn.addTarget(self, action: #selector(didTapRegisterEntry), for: .touchUpInside)
+
+        [logoLbl, agreeBtn, agreeLbl, loginBtn, accountLoginBtn, registerBtn].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            welcomePage.addSubview($0)
+        }
+
+        NSLayoutConstraint.activate([
+            logoLbl.centerXAnchor.constraint(equalTo: welcomePage.centerXAnchor),
+            logoLbl.centerYAnchor.constraint(equalTo: welcomePage.centerYAnchor, constant: -60),
+
+            agreeBtn.leadingAnchor.constraint(equalTo: welcomePage.leadingAnchor, constant: 24),
+            agreeBtn.bottomAnchor.constraint(equalTo: loginBtn.topAnchor, constant: -16),
+            agreeBtn.widthAnchor.constraint(equalToConstant: 22),
+            agreeBtn.heightAnchor.constraint(equalToConstant: 22),
+
+            agreeLbl.leadingAnchor.constraint(equalTo: agreeBtn.trailingAnchor, constant: 8),
+            agreeLbl.centerYAnchor.constraint(equalTo: agreeBtn.centerYAnchor),
+            agreeLbl.trailingAnchor.constraint(lessThanOrEqualTo: welcomePage.trailingAnchor, constant: -24),
+
+            loginBtn.bottomAnchor.constraint(equalTo: accountLoginBtn.topAnchor, constant: -12),
+            loginBtn.leadingAnchor.constraint(equalTo: welcomePage.leadingAnchor, constant: 24),
+            loginBtn.trailingAnchor.constraint(equalTo: welcomePage.trailingAnchor, constant: -24),
+            loginBtn.heightAnchor.constraint(equalToConstant: 56),
+
+            accountLoginBtn.bottomAnchor.constraint(equalTo: registerBtn.topAnchor, constant: -12),
+            accountLoginBtn.leadingAnchor.constraint(equalTo: welcomePage.leadingAnchor, constant: 24),
+            accountLoginBtn.trailingAnchor.constraint(equalTo: welcomePage.trailingAnchor, constant: -24),
+            accountLoginBtn.heightAnchor.constraint(equalToConstant: 56),
+
+            registerBtn.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -48),
+            registerBtn.leadingAnchor.constraint(equalTo: welcomePage.leadingAnchor, constant: 24),
+            registerBtn.trailingAnchor.constraint(equalTo: welcomePage.trailingAnchor, constant: -24),
+            registerBtn.heightAnchor.constraint(equalToConstant: 56)
+        ])
+    }
+
+    // MARK: - 页1 布局
+    private func setupPhonePage() {
+        phonePage.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(phonePage)
+        NSLayoutConstraint.activate([
+            phonePage.topAnchor.constraint(equalTo: view.topAnchor),
+            phonePage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            phonePage.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            phonePage.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        // 返回
+        let cfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: cfg), for: .normal)
+        backBtn.tintColor = AppText
+        backBtn.addTarget(self, action: #selector(didTapPhoneBack), for: .touchUpInside)
+
+        // 标题
+        phoneTitle.text = "输入手机号"
+        phoneTitle.font = .systemFont(ofSize: 28, weight: .bold)
+        phoneTitle.textColor = AppText
+
+        // +86 区号框
+        countryBox.backgroundColor = AppGray
+        countryBox.layer.cornerRadius = 14
+        countryLbl.text = "+86"
+        countryLbl.font = .systemFont(ofSize: 18, weight: .medium)
+        countryLbl.textColor = AppText
+
+        // 手机号输入框
+        phoneBox.backgroundColor = AppGray
+        phoneBox.layer.cornerRadius = 14
+        phoneField.font = .systemFont(ofSize: 20)
+        phoneField.textColor = AppText
         phoneField.keyboardType = .phonePad
-        phoneField.borderStyle = .roundedRect
-        passwordField.placeholder = "密码"
-        passwordField.isSecureTextEntry = true
-        passwordField.borderStyle = .roundedRect
-        smsField.placeholder = "验证码"
-        smsField.keyboardType = .numberPad
-        smsField.borderStyle = .roundedRect
+        phoneField.delegate = self
+        phoneField.addTarget(self, action: #selector(phoneChanged), for: .editingChanged)
+        phoneField.placeholder = "请输入手机号"
+        phoneField.tintColor = AppPrimary
 
-        getCodeButton.setTitle("获取验证码", for: .normal)
-        getCodeButton.setTitleColor(AppPrimary, for: .normal)
-        getCodeButton.addTarget(self, action: #selector(getCode), for: .touchUpInside)
+        // 发送验证码按钮
+        sendBtn.setTitle("发送验证码", for: .normal)
+        sendBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        sendBtn.setTitleColor(.white, for: .normal)
+        sendBtn.backgroundColor = AppText          // 接近黑色，与图片一致
+        sendBtn.layer.cornerRadius = 28
+        sendBtn.isEnabled = false
+        sendBtn.alpha = 0.35
+        sendBtn.addTarget(self, action: #selector(didTapSend), for: .touchUpInside)
 
-        segment.selectedSegmentIndex = 0
-        segment.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+        // 使用密码登录（短信平台未就绪时的兜底登录方式）
+        pwdEntryBtn.setTitle("使用密码登录", for: .normal)
+        pwdEntryBtn.titleLabel?.font = .systemFont(ofSize: 15)
+        pwdEntryBtn.setTitleColor(AppTextLight, for: .normal)
+        pwdEntryBtn.addTarget(self, action: #selector(didTapPwdLogin), for: .touchUpInside)
 
-        otherLoginButton.backgroundColor = UIColor(white: 0.94, alpha: 1)
-        otherLoginButton.layer.cornerRadius = 12
-        otherLoginButton.setTitleColor(AppText, for: .normal)
-        otherLoginButton.setTitle("登录", for: .normal)
-        otherLoginButton.addTarget(self, action: #selector(otherLoginTapped), for: .touchUpInside)
+        // Add subviews
+        [backBtn, phoneTitle, countryBox, phoneBox, sendBtn, pwdEntryBtn].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            phonePage.addSubview($0)
+        }
+        countryBox.addSubview(countryLbl)
+        phoneBox.addSubview(phoneField)
+        countryLbl.translatesAutoresizingMaskIntoConstraints = false
+        phoneField.translatesAutoresizingMaskIntoConstraints = false
 
-        otherTip.text = "未注册的手机号，验证码登录将自动创建账号"
-        otherTip.font = .systemFont(ofSize: 12)
-        otherTip.textColor = .tertiaryLabel
-        otherTip.numberOfLines = 0
+        let sendBottom = sendBtn.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -48)
+        sendBtnBottomConstraint = sendBottom
 
-        let codeRow = UIStackView(arrangedSubviews: [smsField, getCodeButton])
-        codeRow.spacing = 8
-        codeRow.axis = .horizontal
-        getCodeButton.setContentHuggingPriority(.required, for: .horizontal)
-
-        let inner = UIStackView(arrangedSubviews: [segment, phoneField, codeRow, passwordField, otherLoginButton, otherTip])
-        inner.axis = .vertical
-        inner.spacing = 12
-        inner.translatesAutoresizingMaskIntoConstraints = false
-        otherContainer.addSubview(inner)
         NSLayoutConstraint.activate([
-            inner.topAnchor.constraint(equalTo: otherContainer.topAnchor),
-            inner.leadingAnchor.constraint(equalTo: otherContainer.leadingAnchor),
-            inner.trailingAnchor.constraint(equalTo: otherContainer.trailingAnchor),
-            inner.bottomAnchor.constraint(equalTo: otherContainer.bottomAnchor)
+            backBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            backBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            backBtn.widthAnchor.constraint(equalToConstant: 44),
+            backBtn.heightAnchor.constraint(equalToConstant: 44),
+
+            phoneTitle.topAnchor.constraint(equalTo: backBtn.bottomAnchor, constant: 24),
+            phoneTitle.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+
+            countryBox.topAnchor.constraint(equalTo: phoneTitle.bottomAnchor, constant: 36),
+            countryBox.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            countryBox.widthAnchor.constraint(equalToConstant: 82),
+            countryBox.heightAnchor.constraint(equalToConstant: 58),
+
+            countryLbl.centerXAnchor.constraint(equalTo: countryBox.centerXAnchor),
+            countryLbl.centerYAnchor.constraint(equalTo: countryBox.centerYAnchor),
+
+            phoneBox.topAnchor.constraint(equalTo: countryBox.topAnchor),
+            phoneBox.leadingAnchor.constraint(equalTo: countryBox.trailingAnchor, constant: 12),
+            phoneBox.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            phoneBox.heightAnchor.constraint(equalToConstant: 58),
+
+            phoneField.leadingAnchor.constraint(equalTo: phoneBox.leadingAnchor, constant: 16),
+            phoneField.trailingAnchor.constraint(equalTo: phoneBox.trailingAnchor, constant: -16),
+            phoneField.centerYAnchor.constraint(equalTo: phoneBox.centerYAnchor),
+
+            sendBottom,
+            sendBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            sendBtn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            sendBtn.heightAnchor.constraint(equalToConstant: 56),
+
+            pwdEntryBtn.topAnchor.constraint(equalTo: sendBtn.bottomAnchor, constant: 16),
+            pwdEntryBtn.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pwdEntryBtn.heightAnchor.constraint(equalToConstant: 24)
         ])
-        segmentChanged()
     }
 
-    // MARK: 交互
+    // MARK: - 页3 布局（账号密码登录）
+    private func setupPwdPage() {
+        pwdPage.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(pwdPage)
+        NSLayoutConstraint.activate([
+            pwdPage.topAnchor.constraint(equalTo: view.topAnchor),
+            pwdPage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pwdPage.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pwdPage.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        pwdPage.isHidden = true
+        pwdPage.backgroundColor = AppBg
 
-    private func refreshMaskedPhone() {
-        let masked = (AuthService.shared.provider as? MockAuthProvider)?.oneKeyMaskedPhone ?? "138****8000"
-        maskedPhoneLabel.text = masked
-        maskedPhoneLabel.textColor = .white.withAlphaComponent(0.85)
-        maskedPhoneLabel.font = .systemFont(ofSize: 13)
+        // 返回
+        let cfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        pwdBackBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: cfg), for: .normal)
+        pwdBackBtn.tintColor = AppText
+        pwdBackBtn.addTarget(self, action: #selector(didTapPwdBack), for: .touchUpInside)
+
+        pwdTitle.text = "账号密码登录"
+        pwdTitle.font = .systemFont(ofSize: 28, weight: .bold)
+        pwdTitle.textColor = AppText
+
+        // 手机号框
+        pwdPhoneBox.backgroundColor = AppGray
+        pwdPhoneBox.layer.cornerRadius = 14
+        pwdPhoneField.font = .systemFont(ofSize: 20)
+        pwdPhoneField.textColor = AppText
+        pwdPhoneField.keyboardType = .default
+        pwdPhoneField.delegate = self
+        pwdPhoneField.addTarget(self, action: #selector(pwdPhoneChanged), for: .editingChanged)
+        pwdPhoneField.placeholder = "请输入账号或手机号"
+        pwdPhoneField.tintColor = AppPrimary
+
+        // 密码框
+        pwdBox.backgroundColor = AppGray
+        pwdBox.layer.cornerRadius = 14
+        pwdField.font = .systemFont(ofSize: 20)
+        pwdField.textColor = AppText
+        pwdField.isSecureTextEntry = true
+        pwdField.placeholder = "请输入密码"
+        pwdField.tintColor = AppPrimary
+        pwdField.returnKeyType = .go
+        pwdField.delegate = self
+        pwdField.addTarget(self, action: #selector(pwdFieldChanged), for: .editingChanged)
+
+        // 登录按钮
+        pwdLoginBtn.setTitle("登 录", for: .normal)
+        pwdLoginBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        pwdLoginBtn.setTitleColor(.white, for: .normal)
+        pwdLoginBtn.backgroundColor = AppText
+        pwdLoginBtn.layer.cornerRadius = 28
+        pwdLoginBtn.isEnabled = false
+        pwdLoginBtn.alpha = 0.35
+        pwdLoginBtn.addTarget(self, action: #selector(didTapPwdLoginSubmit), for: .touchUpInside)
+
+        [pwdBackBtn, pwdTitle, pwdPhoneBox, pwdBox, pwdLoginBtn].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            pwdPage.addSubview($0)
+        }
+        pwdPhoneBox.addSubview(pwdPhoneField)
+        pwdBox.addSubview(pwdField)
+        pwdPhoneField.translatesAutoresizingMaskIntoConstraints = false
+        pwdField.translatesAutoresizingMaskIntoConstraints = false
+
+        let bottom = pwdLoginBtn.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -48)
+        pwdLoginBottomConstraint = bottom
+
+        NSLayoutConstraint.activate([
+            pwdBackBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            pwdBackBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            pwdBackBtn.widthAnchor.constraint(equalToConstant: 44),
+            pwdBackBtn.heightAnchor.constraint(equalToConstant: 44),
+
+            pwdTitle.topAnchor.constraint(equalTo: pwdBackBtn.bottomAnchor, constant: 24),
+            pwdTitle.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+
+            pwdPhoneBox.topAnchor.constraint(equalTo: pwdTitle.bottomAnchor, constant: 36),
+            pwdPhoneBox.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            pwdPhoneBox.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            pwdPhoneBox.heightAnchor.constraint(equalToConstant: 58),
+
+            pwdPhoneField.leadingAnchor.constraint(equalTo: pwdPhoneBox.leadingAnchor, constant: 16),
+            pwdPhoneField.trailingAnchor.constraint(equalTo: pwdPhoneBox.trailingAnchor, constant: -16),
+            pwdPhoneField.centerYAnchor.constraint(equalTo: pwdPhoneBox.centerYAnchor),
+
+            pwdBox.topAnchor.constraint(equalTo: pwdPhoneBox.bottomAnchor, constant: 12),
+            pwdBox.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            pwdBox.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            pwdBox.heightAnchor.constraint(equalToConstant: 58),
+
+            pwdField.leadingAnchor.constraint(equalTo: pwdBox.leadingAnchor, constant: 16),
+            pwdField.trailingAnchor.constraint(equalTo: pwdBox.trailingAnchor, constant: -16),
+            pwdField.centerYAnchor.constraint(equalTo: pwdBox.centerYAnchor),
+
+            bottom,
+            pwdLoginBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            pwdLoginBtn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            pwdLoginBtn.heightAnchor.constraint(equalToConstant: 56)
+        ])
     }
 
-    @objc private func toggleOther() {
-        showingOther.toggle()
-        UIView.animate(withDuration: 0.25) {
-            self.otherContainer.isHidden = !self.showingOther
-            self.otherToggle.setTitle(self.showingOther ? "其他登录方式 ▴" : "其他登录方式 ▾", for: .normal)
+    // MARK: - 页2 布局
+    private func setupCodePage() {
+        codePage.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(codePage)
+        NSLayoutConstraint.activate([
+            codePage.topAnchor.constraint(equalTo: view.topAnchor),
+            codePage.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            codePage.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            codePage.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        codePage.isHidden = true
+
+        // 返回
+        let cfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        codeBackBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: cfg), for: .normal)
+        codeBackBtn.tintColor = AppText
+        codeBackBtn.addTarget(self, action: #selector(didTapCodeBack), for: .touchUpInside)
+
+        // 标题
+        codeTitle.text = "输入验证码"
+        codeTitle.font = .systemFont(ofSize: 28, weight: .bold)
+        codeTitle.textColor = AppText
+
+        // 6 位验证码框
+        codeStack.axis = .horizontal
+        codeStack.distribution = .fillEqually
+        codeStack.spacing = 10
+        for i in 0..<6 {
+            let box = UILabel()
+            box.backgroundColor = AppGray
+            box.layer.cornerRadius = 14
+            box.clipsToBounds = true
+            box.textAlignment = .center
+            box.font = .systemFont(ofSize: 26, weight: .medium)
+            box.textColor = AppText
+            box.isUserInteractionEnabled = true
+            box.tag = i
+            let tap = UITapGestureRecognizer(target: self, action: #selector(didTapCodeBox(_:)))
+            box.addGestureRecognizer(tap)
+            codeBoxes.append(box)
+            codeStack.addArrangedSubview(box)
+        }
+        codeStack.translatesAutoresizingMaskIntoConstraints = false
+
+        // 隐藏的输入框（接收系统键盘 + 短信自动填充）
+        hiddenField.keyboardType = .numberPad
+        hiddenField.textContentType = .oneTimeCode
+        hiddenField.delegate = self
+        hiddenField.addTarget(self, action: #selector(codeChanged), for: .editingChanged)
+        hiddenField.isHidden = true
+
+        // 重新发送
+        resendBtn.titleLabel?.font = .systemFont(ofSize: 14)
+        resendBtn.setTitleColor(AppTextLight, for: .normal)
+        resendBtn.contentHorizontalAlignment = .left
+        resendBtn.addTarget(self, action: #selector(didTapResend), for: .touchUpInside)
+
+        // 下一步按钮
+        nextBtn.setTitle("下一步  →", for: .normal)
+        nextBtn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        nextBtn.setTitleColor(.white, for: .normal)
+        nextBtn.backgroundColor = AppText
+        nextBtn.layer.cornerRadius = 28
+        nextBtn.isEnabled = false
+        nextBtn.alpha = 0.35
+        nextBtn.addTarget(self, action: #selector(didTapNext), for: .touchUpInside)
+
+        // Add
+        [codeBackBtn, codeTitle, codeStack, resendBtn, nextBtn, hiddenField].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            codePage.addSubview($0)
+        }
+
+        let nextBottom = nextBtn.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -48)
+        nextBtnBottomConstraint = nextBottom
+
+        NSLayoutConstraint.activate([
+            codeBackBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            codeBackBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            codeBackBtn.widthAnchor.constraint(equalToConstant: 44),
+            codeBackBtn.heightAnchor.constraint(equalToConstant: 44),
+
+            codeTitle.topAnchor.constraint(equalTo: codeBackBtn.bottomAnchor, constant: 24),
+            codeTitle.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+
+            codeStack.topAnchor.constraint(equalTo: codeTitle.bottomAnchor, constant: 36),
+            codeStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            codeStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            codeStack.heightAnchor.constraint(equalToConstant: 58),
+
+            resendBtn.topAnchor.constraint(equalTo: codeStack.bottomAnchor, constant: 20),
+            resendBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+
+            nextBottom,
+            nextBtn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            nextBtn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            nextBtn.heightAnchor.constraint(equalToConstant: 56)
+        ])
+    }
+
+    // MARK: - Toast
+    private func setupToast() {
+        toastLbl.textAlignment = .center
+        toastLbl.textColor = .systemRed
+        toastLbl.font = .systemFont(ofSize: 14, weight: .medium)
+        toastLbl.numberOfLines = 0
+        toastLbl.isHidden = true
+        toastLbl.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(toastLbl)
+        NSLayoutConstraint.activate([
+            toastLbl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toastLbl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80),
+            toastLbl.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+            toastLbl.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40)
+        ])
+    }
+
+    // MARK: - 页面切换
+    private func showWelcomePage() {
+        welcomePage.isHidden = false
+        phonePage.isHidden = true
+        codePage.isHidden = true
+        pwdPage.isHidden = true
+    }
+
+    private func showPhonePage() {
+        welcomePage.isHidden = true
+        phonePage.isHidden = false
+        codePage.isHidden = true
+        pwdPage.isHidden = true
+        phoneField.becomeFirstResponder()
+    }
+
+    private func showCodePage() {
+        welcomePage.isHidden = true
+        phonePage.isHidden = true
+        codePage.isHidden = false
+        pwdPage.isHidden = true
+        isVerifying = false
+        hiddenField.becomeFirstResponder()
+        updateCodeBoxes()
+        updateResendTitle()
+    }
+
+    // MARK: - 键盘适配
+    private func observeKeyboard() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow(_:)),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let endFrame = info[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else {
+            return
+        }
+        keyboardHeight = endFrame.height
+        let bottomOffset = -(keyboardHeight + 16) // 键盘顶部上方 16pt
+
+        UIView.animate(withDuration: duration) {
+            self.sendBtnBottomConstraint?.constant = bottomOffset
+            self.nextBtnBottomConstraint?.constant = bottomOffset
+            self.pwdLoginBottomConstraint?.constant = bottomOffset
+            self.view.layoutIfNeeded()
         }
     }
 
-    @objc private func segmentChanged() {
-        let isSMS = segment.selectedSegmentIndex == 0
-        smsField.isHidden = !isSMS
-        getCodeButton.isHidden = !isSMS
-        passwordField.isHidden = isSMS
-        otherLoginButton.setTitle(isSMS ? "验证码登录" : "密码登录", for: .normal)
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let duration = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else {
+            return
+        }
+        keyboardHeight = 0
+
+        UIView.animate(withDuration: duration) {
+            self.sendBtnBottomConstraint?.constant = -48
+            self.nextBtnBottomConstraint?.constant = -48
+            self.pwdLoginBottomConstraint?.constant = -48
+            self.view.layoutIfNeeded()
+        }
     }
 
-    @objc private func oneKeyTapped() {
-        showLoading(on: oneKeyButton, text: "本机号码一键登录")
-        Task {
-            do {
-                let user = try await AuthService.shared.loginByOneKey()
-                await MainActor.run { self.finishLogin(user) }
-            } catch {
-                await MainActor.run { self.hideLoading(self.oneKeyButton); self.showToast("一键登录失败，请重试") }
+    // MARK: - Mock 验证码提示
+    private func observeMockCode() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onMockCodeSent(_:)),
+            name: .mockSMSSent,
+            object: nil
+        )
+    }
+
+    @objc private func onMockCodeSent(_ notification: Notification) {
+        if let code = notification.userInfo?["code"] as? String {
+            DispatchQueue.main.async {
+                self.showToast("验证码（Mock）：\(code)")
             }
         }
     }
 
-    @objc private func getCode() {
-        guard let phone = phoneField.text, !phone.isEmpty else {
-            showToast("请输入手机号"); return
+    // MARK: - 页1 交互
+    @objc private func phoneChanged() {
+        let raw = phoneField.text ?? ""
+        let digits = raw.filter { $0.isNumber }
+        if digits.count > 11 {
+            phoneField.text = String(digits.prefix(11))
+        } else {
+            phoneField.text = digits
         }
+        let valid = digits.count == 11
+        sendBtn.isEnabled = valid
+        sendBtn.alpha = valid ? 1.0 : 0.35
+    }
+
+    @objc private func didTapSend() {
+        let phone = phoneField.text ?? ""
+        guard phone.count == 11 else { return }
+        currentPhone = phone
+        currentCode = ""
+        hiddenField.text = ""
+        phoneField.resignFirstResponder()
+
         Task {
             do {
                 _ = try await AuthService.shared.provider.sendSMSCode(phone: phone)
-                await MainActor.run { self.startCountdown() }
+                await MainActor.run {
+                    self.showCodePage()
+                    self.startCountdown()
+                }
             } catch {
-                await MainActor.run { self.showToast((error as? AuthError)?.errorDescription ?? "发送失败") }
+                await MainActor.run {
+                    self.showToast((error as? AuthError)?.errorDescription ?? "发送失败")
+                }
             }
         }
     }
 
+    @objc private func didTapPhoneBack() {
+        phoneField.resignFirstResponder()
+        showWelcomePage()
+    }
+
+    // MARK: - 页0 交互
+    @objc private func didTapAgree() {
+        isAgreed.toggle()
+        agreeBtn.isSelected = isAgreed
+        agreeBtn.tintColor = isAgreed ? AppPrimary : AppTextLight
+    }
+
+    @objc private func didTapAgreeLabel(_ gesture: UITapGestureRecognizer) {
+        let location = gesture.location(in: agreeLbl)
+        let textStorage = NSTextStorage(attributedString: agreeLbl.attributedText ?? NSAttributedString())
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+        let textContainer = NSTextContainer(size: agreeLbl.bounds.size)
+        textContainer.lineFragmentPadding = 0
+        layoutManager.addTextContainer(textContainer)
+        layoutManager.ensureLayout(for: textContainer)
+
+        let index = layoutManager.characterIndex(for: location, in: textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+        let fullText = agreeLbl.text ?? ""
+        if let range1 = fullText.range(of: "用户协议"), NSRange(range1, in: fullText).contains(index) {
+            showToast("用户协议页面（待接入）")
+            return
+        }
+        if let range2 = fullText.range(of: "隐私政策"), NSRange(range2, in: fullText).contains(index) {
+            showToast("隐私政策页面（待接入）")
+            return
+        }
+        didTapAgree()
+    }
+
+    @objc private func didTapLoginEntry() {
+        guard isAgreed else {
+            showToast("请先阅读并同意用户协议和隐私政策")
+            return
+        }
+        showPhonePage()
+    }
+
+    @objc private func didTapPwdLogin() {
+        showPwdPage()
+    }
+
+    private func showPwdPage() {
+        welcomePage.isHidden = true
+        phonePage.isHidden = true
+        codePage.isHidden = true
+        pwdPage.isHidden = false
+        pwdPhoneField.becomeFirstResponder()
+    }
+
+    @objc private func didTapPwdBack() {
+        pwdPhoneField.resignFirstResponder()
+        pwdField.resignFirstResponder()
+        showWelcomePage()
+    }
+
+    @objc private func pwdPhoneChanged() {
+        updatePwdLoginEnabled()
+    }
+
+    @objc private func pwdFieldChanged() {
+        updatePwdLoginEnabled()
+    }
+
+    private func updatePwdLoginEnabled() {
+        let valid = !(pwdPhoneField.text ?? "").isEmpty && !(pwdField.text ?? "").isEmpty
+        pwdLoginBtn.isEnabled = valid
+        pwdLoginBtn.alpha = valid ? 1.0 : 0.35
+    }
+
+    @objc private func didTapPwdLoginSubmit() {
+        let phone = pwdPhoneField.text ?? ""
+        let pwd = pwdField.text ?? ""
+        guard !phone.isEmpty, !pwd.isEmpty else { return }
+        pwdLoginBtn.isEnabled = false
+        pwdField.resignFirstResponder()
+
+        Task {
+            do {
+                let user = try await AuthService.shared.loginByPassword(phone: phone, password: pwd)
+                await MainActor.run {
+                    self.pwdLoginBtn.isEnabled = true
+                    self.finishLogin(user)
+                }
+                Log("密码登录成功 uid=\(user.uid) name=\(user.nickname)")
+            } catch {
+                let msg = (error as? AuthError)?.errorDescription ?? error.localizedDescription
+                await MainActor.run {
+                    self.pwdLoginBtn.isEnabled = true
+                    self.showToast(msg)
+                }
+            }
+        }
+    }
+
+    @objc private func didTapRegisterEntry() {
+        guard isAgreed else {
+            showToast("请先阅读并同意用户协议和隐私政策")
+            return
+        }
+        let vc = RegisterByPasswordViewController()
+        vc.onRegistered = { [weak self] in
+            // 注册页已 push 进 loginNav，直接让登录流程整体退出即可，
+            // 由 finishLogin 统一 dismiss 整个 loginNav（含注册页）。
+            self?.finishLogin()
+        }
+        vc.onCancel = { [weak self] in
+            self?.navigationController?.popViewController(animated: true)
+        }
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    // MARK: - 页2 交互
+    @objc private func didTapCodeBack() {
+        hiddenField.resignFirstResponder()
+        timer?.invalidate()
+        countdown = 0
+        showPhonePage()
+    }
+
+    @objc private func didTapCodeBox(_ gesture: UITapGestureRecognizer) {
+        hiddenField.becomeFirstResponder()
+    }
+
+    @objc private func codeChanged() {
+        let raw = hiddenField.text ?? ""
+        let digits = raw.filter { $0.isNumber }
+
+        if digits.count > 6 {
+            currentCode = String(digits.prefix(6))
+        } else {
+            currentCode = digits
+        }
+        hiddenField.text = currentCode
+
+        updateCodeBoxes()
+
+        let complete = currentCode.count == 6
+        nextBtn.isEnabled = complete
+        nextBtn.alpha = complete ? 1.0 : 0.35
+
+        if complete && !isVerifying {
+            verifyCode()
+        }
+    }
+
+    private func updateCodeBoxes() {
+        for (i, box) in codeBoxes.enumerated() {
+            if i < currentCode.count {
+                let idx = currentCode.index(currentCode.startIndex, offsetBy: i)
+                box.text = String(currentCode[idx])
+                box.layer.borderWidth = 0
+            } else {
+                box.text = ""
+                if i == currentCode.count {
+                    // 当前聚焦位：主色边框
+                    box.layer.borderWidth = 2
+                    box.layer.borderColor = AppPrimary.cgColor
+                } else {
+                    box.layer.borderWidth = 0
+                }
+            }
+        }
+    }
+
+    @objc private func didTapResend() {
+        guard countdown <= 0 else { return }
+        Task {
+            do {
+                _ = try await AuthService.shared.provider.sendSMSCode(phone: currentPhone)
+                await MainActor.run { self.startCountdown() }
+            } catch {
+                await MainActor.run {
+                    self.showToast((error as? AuthError)?.errorDescription ?? "发送失败")
+                }
+            }
+        }
+    }
+
+    @objc private func didTapNext() {
+        verifyCode()
+    }
+
+    private func verifyCode() {
+        guard currentCode.count == 6, !isVerifying else { return }
+        isVerifying = true
+        nextBtn.isEnabled = false
+
+        Task {
+            do {
+                let user = try await AuthService.shared.loginBySMS(phone: currentPhone, code: currentCode)
+                await MainActor.run { self.finishLogin(user) }
+            } catch {
+                await MainActor.run {
+                    self.isVerifying = false
+                    self.nextBtn.isEnabled = true
+                    self.nextBtn.alpha = 1.0
+                    self.showToast((error as? AuthError)?.errorDescription ?? "验证失败")
+                }
+            }
+        }
+    }
+
+    // MARK: - 倒计时
     private func startCountdown() {
         countdown = 60
-        getCodeButton.isEnabled = false
         timer?.invalidate()
+        updateResendTitle()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] t in
             guard let self = self else { t.invalidate(); return }
             self.countdown -= 1
-            if self.countdown <= 0 {
-                t.invalidate()
-                self.getCodeButton.isEnabled = true
-                self.getCodeButton.setTitle("获取验证码", for: .normal)
-            } else {
-                self.getCodeButton.setTitle("\(self.countdown)s 后重发", for: .normal)
-            }
+            if self.countdown <= 0 { t.invalidate() }
+            self.updateResendTitle()
         }
     }
 
-    @objc private func otherLoginTapped() {
-        guard let phone = phoneField.text, !phone.isEmpty else { showToast("请输入手机号"); return }
-        let isSMS = segment.selectedSegmentIndex == 0
-        showLoading(on: otherLoginButton, text: "登录中")
-        Task {
-            do {
-                let user: AuthUser
-                if isSMS {
-                    guard let code = smsField.text, !code.isEmpty else {
-                        await MainActor.run { self.hideLoading(self.otherLoginButton); self.showToast("请输入验证码") }; return
-                    }
-                    user = try await AuthService.shared.loginBySMS(phone: phone, code: code)
-                } else {
-                    guard let pwd = passwordField.text, !pwd.isEmpty else {
-                        await MainActor.run { self.hideLoading(self.otherLoginButton); self.showToast("请输入密码") }; return
-                    }
-                    user = try await AuthService.shared.loginByPassword(phone: phone, password: pwd)
-                }
-                await MainActor.run { self.hideLoading(self.otherLoginButton); self.finishLogin(user) }
-            } catch {
-                await MainActor.run { self.hideLoading(self.otherLoginButton); self.showToast((error as? AuthError)?.errorDescription ?? "登录失败") }
-            }
+    private func updateResendTitle() {
+        if countdown > 0 {
+            resendBtn.setTitle("重新发送 \(countdown)s", for: .normal)
+            resendBtn.setTitleColor(AppTextLight, for: .normal)
+            resendBtn.isEnabled = false
+        } else {
+            resendBtn.setTitle("重新发送", for: .normal)
+            resendBtn.setTitleColor(AppPrimary, for: .normal)
+            resendBtn.isEnabled = true
         }
     }
 
-    @objc private func goRegister() {
-        let reg = RegisterViewController()
-        navigationController?.pushViewController(reg, animated: true)
+    // MARK: - 完成登录
+    private func finishLogin(_ user: AuthUser? = nil) {
+        // 先 dismiss 登录界面（释放主线程）
+        AuthCoordinator.shared.dismissLogin { [weak self] in
+            NotificationCenter.default.post(name: .authDidChange, object: nil)
+            self?.onLogin?()
+            // dismiss 完成后再启动数据同步（避免 bootstrap @MainActor 阻塞 dismiss 动画）
+            Task { await AppDataStore.shared.bootstrap() }
+        }
     }
 
-    @objc private func skip() {
-        // 游客：关闭登录，回到原浏览态
-        AuthCoordinator.shared.dismissLogin()
-    }
-
-    // MARK: 完成
-
-    private func finishLogin(_ user: AuthUser) {
-        NotificationCenter.default.post(name: .authDidChange, object: nil)
-        AuthCoordinator.shared.dismissLogin()
-        onLogin?()
-    }
-
-    // MARK: 工具
-
+    // MARK: - Toast
     private func showToast(_ text: String) {
-        toastLabel.text = text
-        toastLabel.isHidden = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { self.toastLabel.isHidden = true }
-    }
-
-    private func showLoading(on button: UIButton, text: String) {
-        button.isEnabled = false
-        if button === oneKeyButton {
-            oneKeyTitleLabel.text = text + "…"
-            maskedPhoneLabel.isHidden = true
-        } else {
-            button.setTitle(text + "…", for: .normal)
+        toastLbl.text = text
+        toastLbl.isHidden = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.toastLbl.isHidden = true
         }
     }
+}
 
-    private func hideLoading(_ button: UIButton) {
-        button.isEnabled = true
-        if button === oneKeyButton {
-            oneKeyTitleLabel.text = "本机号码一键登录"
-            maskedPhoneLabel.isHidden = false
-        } else {
-            button.setTitle("登录", for: .normal)
+// MARK: - UITextFieldDelegate
+extension AuthGateViewController: UITextFieldDelegate {
+    func textField(_ textField: UITextField,
+                   shouldChangeCharactersIn range: NSRange,
+                   replacementString string: String) -> Bool {
+        if textField == phoneField {
+            // 手机号只允许数字
+            return string.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil
         }
+        if textField == hiddenField {
+            // 验证码也只做数字过滤（6位限制在 codeChanged 中处理）
+            return string.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil
+        }
+        return true
     }
 }
 

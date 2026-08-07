@@ -11,6 +11,19 @@ final class ProfileViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 248/255, green: 248/255, blue: 248/255, alpha: 1)
 
+        // 导航栏固定浅色外观，避免 Dark Mode 下白字白底看不清
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(red: 248/255, green: 248/255, blue: 248/255, alpha: 1)
+        appearance.titleTextAttributes = [
+            .foregroundColor: UIColor(red: 26/255, green: 26/255, blue: 26/255, alpha: 1),
+            .font: UIFont.systemFont(ofSize: 17, weight: .semibold)
+        ]
+        navigationController?.navigationBar.standardAppearance = appearance
+        navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        // 导航栏按钮统一使用主色（绿色），确保在浅色背景上清晰可见
+        navigationController?.navigationBar.tintColor = UIColor(red: 0x10/255, green: 0xB9/255, blue: 0x81/255, alpha: 1)
+
         let profileView = ProfileView(
             onClose: { [weak self] in self?.dismiss(animated: true) },
             onNavigate: { [weak self] dest in self?.navigate(dest) },
@@ -51,6 +64,8 @@ final class ProfileViewController: UIViewController {
         case .goal:      pushSwiftUI(GoalView(), title: "减脂目标")
         case .trend:     pushSwiftUI(WeightTrendView(), title: "体重趋势")
         case .reminder:  pushSwiftUI(ReminderView(), title: "提醒设置")
+        case .feedback:  pushSwiftUI(FeedbackView(), title: "意见反馈")
+        case .about:     pushSwiftUI(AboutView(), title: "关于我们")
         case .account:
             let accountView = AccountSettingsView(
                 onLogin: { [weak self] in self?.loginTapped() },

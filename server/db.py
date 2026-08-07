@@ -15,10 +15,11 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.pool import NullPool
 
 # ── 数据库连接：生产用 PostgreSQL，开发默认 SQLite ──
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"sqlite:///{os.path.join(os.path.dirname(__file__), 'foodsticker.db')}",
-)
+# 注意：os.getenv 在环境变量被显式设为空字符串（如 .env 中 DATABASE_URL=）时
+# 会返回 "" 而非默认值，因此需对空值做回退，否则 create_engine("") 会崩溃。
+_DEFAULT_SQLITE = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'foodsticker.db')}"
+_database_url = os.getenv("DATABASE_URL")
+DATABASE_URL = _database_url.strip() if _database_url and _database_url.strip() else _DEFAULT_SQLITE
 DATABASE_READ_URL = os.getenv("DB_READ_URL", "")  # 只读副本 URL（可选）
 
 
@@ -77,7 +78,10 @@ class User(Base):
     target_weight = Column(Float, default=0)
     height = Column(Float, default=0)
     password_hash = Column(String, default="")
+    phone = Column(String, nullable=True, unique=True, index=True)  # 手机号（短信验证码体系）
+    username = Column(String, nullable=True, unique=True, index=True)  # 账号登录标识（不可预测，与 id 解耦）
     partner_id = Column(String, nullable=True)
+    avatar_b64 = Column(Text, default="")  # 图片头像（base64 JPEG），为空时回退 emoji avatar
 
 
 class Record(Base):
@@ -91,6 +95,15 @@ class Record(Base):
     unit = Column(String, default="")
     time = Column(String, default="")            # HH:MM
     created_at = Column(DateTime, default=datetime.utcnow)
+    image_path = Column(String, default="")       # 食物图片文件路径（存储在 FOOD_IMAGES_DIR）
+    # 营养成分与小贴士（食物记录携带，供对方查看详情时展示）
+    protein_g = Column(Float, default=0)
+    carb_g = Column(Float, default=0)
+    fat_g = Column(Float, default=0)
+    dietary_fiber_g = Column(Float, default=0)
+    sugar_g = Column(Float, default=0)
+    sodium_mg = Column(Float, default=0)
+    vitamin_tips = Column(Text, default="")
 
 
 class Sticker(Base):
@@ -101,6 +114,15 @@ class Sticker(Base):
     image_b64 = Column(Text, default="")          # 兼容旧数据，新贴纸存文件系统
     image_path = Column(String, default="")        # 贴纸文件路径（生产环境使用）
     created_at = Column(DateTime, default=datetime.utcnow)
+    # 营养/贴士字段（多设备同步需要）
+    kcal_per_100g = Column(Float, default=0)
+    protein_g = Column(Float, default=0)
+    carb_g = Column(Float, default=0)
+    fat_g = Column(Float, default=0)
+    dietary_fiber_g = Column(Float, default=0)
+    sodium_mg = Column(Float, default=0)
+    typical_portion_g = Column(Float, default=0)
+    vitamin_tips = Column(Text, default="")
 
 
 class PKWeek(Base):
@@ -129,6 +151,139 @@ def _hash(pwd: str) -> str:
 
 
 # ─────────────────────── 初始化（Alembic 迁移优先） ───────────────────────
+def _ensure_phone_column() -> None:
+    """兼容已部署库：若 users 表缺少 phone 列则自动补齐（无需手写迁移）"""
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("users")}
+    if "phone" in cols:
+        return
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            conn.execute(sqlalchemy.text("ALTER TABLE users ADD COLUMN phone VARCHAR"))
+        else:
+            conn.execute(sqlalchemy.text("ALTER TABLE users ADD COLUMN phone VARCHAR UNIQUE"))
+    print("[db] 已自动补齐 users.phone 列")
+
+
+def _ensure_username_column() -> None:
+    """兼容已部署库：补齐 username 列，并把老账号密码用户（id 即账号）回填。
+
+    旧版账号密码体系 user.id 直接等于用户填写的账号（可预测、且暴露在二维码中）。
+    新版改为 id=随机 UUID、username=账号登录标识。此处为已上线库做平滑迁移。
+    """
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("users")}
+    if "username" in cols:
+        # 列已存在：回填老数据中 username 为空的账号密码用户（id 不含 u_ 前缀的旧账号）
+        with SessionLocal() as s:
+            rows = s.query(User).filter(User.username == None).all()  # noqa: E711
+            for u in rows:
+                if not (u.id or "").startswith("u_"):
+                    u.username = u.id  # 旧账号密码用户：账号即原 id
+            s.commit()
+        return
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            conn.execute(sqlalchemy.text("ALTER TABLE users ADD COLUMN username VARCHAR"))
+        else:
+            conn.execute(sqlalchemy.text("ALTER TABLE users ADD COLUMN username VARCHAR UNIQUE"))
+    print("[db] 已自动补齐 users.username 列")
+    # 新库或列刚建好：回填老账号密码用户
+    with SessionLocal() as s:
+        rows = s.query(User).filter(User.username == None).all()  # noqa: E711
+        for u in rows:
+            if not (u.id or "").startswith("u_"):
+                u.username = u.id
+        s.commit()
+
+
+def _ensure_image_path_column() -> None:
+    """兼容已部署库：若 records 表缺少 image_path 列则自动补齐（食物图片云端存储）"""
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("records")}
+    if "image_path" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text("ALTER TABLE records ADD COLUMN image_path VARCHAR DEFAULT ''"))
+    print("[db] 已自动补齐 records.image_path 列")
+
+
+def _ensure_record_nutrition_columns() -> None:
+    """兼容已部署库：补齐 records 表的营养/贴士列"""
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("records")}
+    needed = [
+        ("protein_g", "FLOAT DEFAULT 0"),
+        ("carb_g", "FLOAT DEFAULT 0"),
+        ("fat_g", "FLOAT DEFAULT 0"),
+        ("dietary_fiber_g", "FLOAT DEFAULT 0"),
+        ("sugar_g", "FLOAT DEFAULT 0"),
+        ("sodium_mg", "FLOAT DEFAULT 0"),
+        ("vitamin_tips", "TEXT DEFAULT ''"),
+    ]
+    any_added = False
+    with engine.begin() as conn:
+        for cname, cdef in needed:
+            if cname not in cols:
+                conn.execute(sqlalchemy.text(f"ALTER TABLE records ADD COLUMN {cname} {cdef}"))
+                any_added = True
+    if any_added:
+        print("[db] 已自动补齐 records 营养/贴士列")
+
+
+def _ensure_user_avatar_b64_column() -> None:
+    """兼容已部署库：若 users 表缺少 avatar_b64 列则自动补齐（图片头像同步）"""
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("users")}
+    if "avatar_b64" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text("ALTER TABLE users ADD COLUMN avatar_b64 TEXT DEFAULT ''"))
+    print("[db] 已自动补齐 users.avatar_b64 列")
+
+
+def _ensure_sticker_image_path_column() -> None:
+    """兼容已部署库：若 stickers 表缺少 image_path 列则自动补齐"""
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("stickers")}
+    if "image_path" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text("ALTER TABLE stickers ADD COLUMN image_path VARCHAR DEFAULT ''"))
+    print("[db] 已自动补齐 stickers.image_path 列")
+
+
+def _ensure_sticker_nutrition_columns() -> None:
+    """兼容已部署库：补齐 stickers 表的营养/贴士列"""
+    import sqlalchemy
+    insp = sqlalchemy.inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("stickers")}
+    needed = [
+        ("kcal_per_100g", "FLOAT DEFAULT 0"),
+        ("protein_g", "FLOAT DEFAULT 0"),
+        ("carb_g", "FLOAT DEFAULT 0"),
+        ("fat_g", "FLOAT DEFAULT 0"),
+        ("dietary_fiber_g", "FLOAT DEFAULT 0"),
+        ("sodium_mg", "FLOAT DEFAULT 0"),
+        ("typical_portion_g", "FLOAT DEFAULT 0"),
+        ("vitamin_tips", "TEXT DEFAULT ''"),
+    ]
+    any_added = False
+    with engine.begin() as conn:
+        for cname, cdef in needed:
+            if cname not in cols:
+                conn.execute(sqlalchemy.text(f"ALTER TABLE stickers ADD COLUMN {cname} {cdef}"))
+                any_added = True
+    if any_added:
+        print("[db] 已自动补齐 stickers 营养/贴士列")
+
+
 def init_db() -> None:
     """初始化数据库：优先使用 Alembic 迁移，降级则用 create_all"""
     try:
@@ -142,10 +297,22 @@ def init_db() -> None:
     except Exception as e:
         print(f"[db] Alembic 迁移失败，降级为 create_all: {e}")
         Base.metadata.create_all(engine)
+    _ensure_phone_column()
+    _ensure_user_avatar_b64_column()   # 必须在 _ensure_username 之前：后者执行 ORM 查询
+    _ensure_username_column()
+    _ensure_image_path_column()
+    _ensure_record_nutrition_columns()
+    _ensure_sticker_image_path_column()
+    _ensure_sticker_nutrition_columns()
     _seed()
 
 
 def _seed() -> None:
+    # 正式用户体系：默认不预置演示账号。
+    # 需要本地开发演示数据时，设置环境变量 FF_ENABLE_SEED=1 后重启服务。
+    if os.getenv("FF_ENABLE_SEED") != "1":
+        return
+
     with SessionLocal() as s:
         if s.query(User).first():
             return

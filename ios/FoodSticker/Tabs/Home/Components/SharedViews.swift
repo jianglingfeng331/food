@@ -61,7 +61,7 @@ struct ProgressBarView: View {
 
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(gradient)
-                    .frame(width: geo.size.width * CGFloat(progress / 100.0), height: height)
+                    .frame(width: max(0, geo.size.width) * CGFloat(progress / 100.0), height: height)
                     .animation(.easeInOut(duration: 0.5), value: progress)
             }
         }

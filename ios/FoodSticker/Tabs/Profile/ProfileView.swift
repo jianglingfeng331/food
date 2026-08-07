@@ -7,7 +7,7 @@ import SwiftUI
 // 菜单移除「成就徽章」「运动计划」，新增「注册 / 登录」入口。
 
 enum ProfileDestination {
-    case goal, trend, reminder, account
+    case goal, trend, reminder, account, feedback, about
 }
 
 struct ProfileView: View {
@@ -86,7 +86,7 @@ struct ProfileView: View {
                     Text(displayName)
                         .font(.app(size: 20, weight: .bold))
                         .foregroundColor(CardTokens.Color.foreground)
-                    Text(isGuest ? "登录后解锁 PK 与更多功能" : (AuthService.shared.currentUser?.phone ?? "已登录"))
+                    Text(isGuest ? "登录后解锁 PK 与更多功能" : "账号：\(AuthService.shared.currentUser?.phone ?? "已登录")")
                         .font(.app(size: 13))
                         .foregroundColor(CardTokens.Color.foregroundMuted)
                 }
@@ -172,6 +172,22 @@ struct ProfileView: View {
                 title: "账户设置") {
                     if isGuest { onLogin?() } else { onNavigate?(.account) }
                 }
+
+            divider
+            menuRow(icon: { MessageSquareIcon()
+                .stroke(CardTokens.Color.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .frame(width: 20, height: 20) },
+                title: "意见反馈") {
+                    if isGuest { onLogin?() } else { onNavigate?(.feedback) }
+                }
+
+            divider
+            menuRow(icon: { InfoIcon()
+                .stroke(CardTokens.Color.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .frame(width: 20, height: 20) },
+                title: "关于我们", requiresLogin: false) {
+                    onNavigate?(.about)
+                }
         }
         .profileCard()
     }
@@ -184,6 +200,7 @@ struct ProfileView: View {
 
     private func menuRow<Icon: View>(@ViewBuilder icon: () -> Icon,
                                      title: String,
+                                     requiresLogin: Bool = true,
                                      action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
@@ -192,7 +209,7 @@ struct ProfileView: View {
                     .font(.app(size: 15))
                     .foregroundColor(CardTokens.Color.foreground)
                 Spacer()
-                if isGuest {
+                if isGuest && requiresLogin {
                     Text("登录后可用")
                         .font(.app(size: 11))
                         .foregroundColor(CardTokens.Color.foregroundSubtle)

@@ -11,21 +11,64 @@ final class PKViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationController?.setNavigationBarHidden(true, animated: false)
-        renderPK()
+        // 推迟到首帧布局完成后才渲染 PKPageView，避免 zero-bounds 导致
+        // SwiftUI GeometryReader/Canvas 报 Invalid frame dimension
+        DispatchQueue.main.async { [weak self] in self?.renderPK() }
+        // 进入即按云端最新关系刷新绑定状态（跨设备同步）
+        Task { @MainActor in await PKBindingCoordinator.shared.refresh() }
 
         NotificationCenter.default.addObserver(self, selector: #selector(rerender),
                                                name: .authDidChange, object: nil)
+
+        // 绑定状态变化（扫码绑定、对手绑定我）时刷新
         NotificationCenter.default.addObserver(self, selector: #selector(rerender),
-                                               name: .pkRelationChanged, object: nil)
+                                               name: .pkBindingDidChange, object: nil)
     }
 
-    deinit { NotificationCenter.default.removeObserver(self) }
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: .authDidChange, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .pkBindingDidChange, object: nil)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // 每次进入 PK 标签页时刷新绑定关系（跨设备同步）。
+        // 注意：不再在此处调用 store.sync() —— 那会用网络快照覆盖首页用户刚保存的体重/饮水等数据。
+        // PK 全量数据刷新由用户下拉刷新触发。
+        Task { @MainActor in
+            await PKBindingCoordinator.shared.refresh()
+        }
+    }
 
     @objc private func rerender() {
-        renderPK()
+        // 同样推迟，确保在 dismiss 动画结束后布局稳定再渲染
+        DispatchQueue.main.async { [weak self] in self?.renderPK() }
+        Task { @MainActor in
+            await PKBindingCoordinator.shared.refresh()
+        }
     }
 
     private func renderPK() {
+        // 游客态：不渲染 PK 页面，直接弹出登录
+        guard AuthService.shared.isLoggedIn else {
+            if hosting == nil {
+                // 首次挂载一个空 view 防止 UI 闪白
+                let emptyBox = UIHostingController(rootView: AnyView(Color(.systemGroupedBackground).ignoresSafeArea()))
+                hosting = emptyBox
+                addChild(emptyBox)
+                emptyBox.view.translatesAutoresizingMaskIntoConstraints = false
+                view.addSubview(emptyBox.view)
+                NSLayoutConstraint.activate([
+                    emptyBox.view.topAnchor.constraint(equalTo: view.topAnchor),
+                    emptyBox.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                    emptyBox.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                    emptyBox.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                ])
+                emptyBox.didMove(toParent: self)
+            }
+            AuthCoordinator.shared.requireLogin(from: self) {}
+            return
+        }
         let binding = PKBindingCoordinator.shared
         let page = PKPageView(
             store: store,
@@ -105,22 +148,44 @@ final class PKViewController: UIViewController {
             AuthCoordinator.shared.presentLogin(from: self)
             return
         }
-        if PKBindingCoordinator.shared.bind(payload: payload) {
-            let ok = UIAlertController(title: "绑定成功", message: "已与对手建立 PK 关系", preferredStyle: .alert)
-            ok.addAction(UIAlertAction(title: "好的", style: .default))
-            present(ok, animated: true)
-        } else {
+        guard let code = PKCode.parse(payload) else {
             let fail = UIAlertController(title: "绑定失败", message: "绑定码无效，请确认后重试", preferredStyle: .alert)
             fail.addAction(UIAlertAction(title: "好的", style: .default))
             present(fail, animated: true)
+            return
+        }
+        let hud = UIAlertController(title: "绑定中…", message: nil, preferredStyle: .alert)
+        present(hud, animated: true)
+        Task { @MainActor in
+            let ok = await PKBindingCoordinator.shared.bind(code)
+            await MainActor.run {
+                hud.dismiss(animated: true) {
+                    if ok {
+                        // 绑定成功后从云端刷新 PK 对战数据
+                        Task { @MainActor in try? await AppDataStore.shared.sync() }
+                        let a = UIAlertController(title: "绑定成功", message: "已与对手建立 PK 关系", preferredStyle: .alert)
+                        a.addAction(UIAlertAction(title: "好的", style: .default))
+                        self.present(a, animated: true)
+                    } else {
+                        let a = UIAlertController(title: "绑定失败",
+                                                  message: PKBindingCoordinator.shared.lastError ?? "绑定码无效，请确认后重试",
+                                                  preferredStyle: .alert)
+                        a.addAction(UIAlertAction(title: "好的", style: .default))
+                        self.present(a, animated: true)
+                    }
+                }
+            }
         }
     }
 
     private func confirmUnbind() {
         let alert = UIAlertController(title: "解除 PK 绑定", message: "确定要与当前对手解绑吗？", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
-        alert.addAction(UIAlertAction(title: "解绑", style: .destructive) { _ in
-            PKBindingCoordinator.shared.unbind()
+            alert.addAction(UIAlertAction(title: "解绑", style: .destructive) { _ in
+            Task { @MainActor in
+                await PKBindingCoordinator.shared.unbind()
+                // coordinator.opponent 已置空，PKPageView 通过 @ObservedObject 自动刷新
+            }
         })
         present(alert, animated: true)
     }

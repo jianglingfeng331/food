@@ -13,41 +13,68 @@ final class RemoteDashboardRepository: DashboardRepository {
         let dashboard = try await dash
         let pkData = try? await pk
 
+        // 按今日日期过滤云端记录，避免昨天的记录被当作今日数据回显
+        let todayStr: String = {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            return fmt.string(from: Date())
+        }()
+        let todayRecords = dashboard.todayRecords.filter { rec in
+            // date 字段缺失时也保留（兼容旧后端不返回 date 的情况）
+            guard let d = rec.date, !d.isEmpty else { return true }
+            return d == todayStr
+        }
+
         // 今日记录汇总
-        let foodRecords = dashboard.todayRecords.filter { $0.type == "food" }
-        let exerciseRecords = dashboard.todayRecords.filter { $0.type == "exercise" }
-        let waterRecords = dashboard.todayRecords.filter { $0.type == "water" }
-        let weightRecords = dashboard.todayRecords.filter { $0.type == "weight" }
+        let foodRecords = todayRecords.filter { $0.type == "food" }
+        let exerciseRecords = todayRecords.filter { $0.type == "exercise" }
+        let waterRecords = todayRecords.filter { $0.type == "water" }
+        let weightRecords = todayRecords.filter { $0.type == "weight" }
 
         let intake = Int(foodRecords.reduce(0) { $0 + $1.calories })
         let exercise = Int(exerciseRecords.reduce(0) { $0 + $1.calories })
         let exerciseMinutes = Int(exerciseRecords.reduce(0) { $0 + $1.amount })
-        let water = Int(waterRecords.reduce(0) { $0 + $1.amount })
+        // 饮水：取当天最后一条 water 记录的 amount（覆盖式）
+        let water = Int(waterRecords.last?.amount ?? 0)
         let latestWeight = weightRecords.last.map { $0.amount }
         let weightTime = weightRecords.last?.time
 
         // 对手信息来自 pk 接口（不存在则为 nil → 游客态/未绑定）
         let opponent = pkData?.partner
 
-        // PK 比分计算
+        // PK 比分计算：双方均从 /pk/week 接口取值，保证同源对称
         let hasOpponent = opponent != nil
-        let myScore: Int? = hasOpponent ? nil : nil // 服务端后续扩展
-        let myWins: Int? = hasOpponent ? nil : nil
-        let opWins: Int? = hasOpponent ? nil : nil
+        // 优先取 pkWeek.me 的每日统计（与对手 partner.dailyStats 同源），兜底用 dashboard
+        let myPkStats = pkData?.me.dailyStats
+        let myStats = myPkStats ?? dashboard.dailyStats
+        let opStats = opponent?.dailyStats
+        let myScore: Int? = hasOpponent ? Int(myStats.intake) : nil
+        let opScore: Int? = hasOpponent ? Int(opStats?.intake ?? 0) : nil
+        // 对手预算为 0 时当作 nil,避免 HomeView 中 max(1, 0)=1 导致进度条满格
+        let opGoalRaw: Int? = hasOpponent ? Int(opStats?.target ?? 0) : nil
+        let opGoal: Int? = (opGoalRaw ?? 0) > 0 ? opGoalRaw : nil
+        // 摄入更低 + 消耗更高 为领先
+        let opponentIsLeader: Bool = {
+            guard let op = opStats else { return false }
+            let myIntake = myStats.intake
+            let myBurned = myStats.burned
+            return op.intake <= myIntake && op.burned >= myBurned
+        }()
 
         return DashboardData(
             myNickname: dashboard.user.name,
-            myAvatarURL: nil,                                  // CloudAPI 暂无头像 URL
+            myAvatarURL: dashboard.user.avatar,
             opponentNickname: opponent?.user.name,
-            opponentAvatarURL: nil,
-            opponentScore: nil,
-            opponentIsLeader: false,                             // 由服务端后续提供
+            opponentAvatarURL: opponent?.user.avatar,
+            opponentScore: opScore,
+            opponentCalorieGoal: opGoal,
+            opponentIsLeader: opponentIsLeader,
             hasOpponent: hasOpponent,
             myScore: myScore,
-            myWins: myWins,
-            opponentWins: opWins,
+            myWins: nil,
+            opponentWins: nil,
             todayCalorieIntake: foodRecords.isEmpty ? nil : intake,
-            todayCalorieGoal: Int(dashboard.dailyStats.target),
+            todayCalorieGoal: dashboard.dailyStats.target > 0 ? Int(dashboard.dailyStats.target) : 0,
             todayExerciseCalories: exerciseRecords.isEmpty ? nil : exercise,
             todayExerciseMinutes: exerciseRecords.isEmpty ? nil : exerciseMinutes,
             todayWaterML: waterRecords.isEmpty ? nil : water,
@@ -71,14 +98,14 @@ final class RemoteStickerRepository: StickerRepository {
                 imageURL: nil,                          // CloudAPI 返回 b64 而非 URL
                 imageData: Data(base64Encoded: sticker.image_b64),
                 thumbnailData: nil,
-                kcalPer100g: 0,                         // TODO: 后端扩展贴纸营养字段
-                proteinG: 0,
-                carbG: 0,
-                fatG: 0,
-                dietaryFiberG: 0,
-                sodiumMg: 0,
-                vitaminTips: "",
-                typicalPortionG: 0,
+                kcalPer100g: sticker.kcalPer100g,
+                proteinG: sticker.proteinG,
+                carbG: sticker.carbG,
+                fatG: sticker.fatG,
+                dietaryFiberG: sticker.dietaryFiberG,
+                sodiumMg: sticker.sodiumMg,
+                vitaminTips: sticker.vitaminTips,
+                typicalPortionG: sticker.typicalPortionG,
                 useCount: 0,
                 isPreset: false,
                 createdAt: Date()
@@ -90,7 +117,7 @@ final class RemoteStickerRepository: StickerRepository {
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             throw URLError(.cannotDecodeContentData)
         }
-        try await CloudAPI.shared.addSticker(name: name, imageB64: imageData.base64EncodedString())
+        try await CloudAPI.shared.addSticker(name: name, imageB64: imageData.base64EncodedString(), nutrition: nutrition)
         // addSticker 目前不返回实体，构造一个本地占位返回
         return StickerItem(
             id: UUID().uuidString,
@@ -135,18 +162,17 @@ final class RemotePKRepository: PKRepository {
     // MARK: 绑定
 
     func sendBindRequest(opponentUID: String) async throws -> PKBindStatus {
-        // TODO: 后端实现 POST /pk/bind
-        throw RemoteRepoError.notImplemented("POST /pk/bind")
+        _ = try await CloudAPI.shared.pkBind(targetUID: opponentUID)
+        return try await getBindStatus()
     }
 
     func getBindStatus() async throws -> PKBindStatus {
-        // 通过 pkWeek 接口推断绑定状态：
-        // 有 partner 字段 → bound，无 → unbound
-        let pk = try? await CloudAPI.shared.pkWeek()
-        if let opponent = pk?.partner {
+        // 直接查询云端关系接口（跨设备同步）
+        let rel = try await CloudAPI.shared.pkRelation()
+        if let p = rel.partner {
             return PKBindStatus(state: .bound(opponent: PKOpponentInfo(
-                uid: opponent.user.id,
-                nickname: opponent.user.name,
+                uid: p.uid,
+                nickname: p.nickname,
                 avatarURL: nil
             )))
         }
@@ -154,8 +180,7 @@ final class RemotePKRepository: PKRepository {
     }
 
     func unbind() async throws {
-        // TODO: 后端实现 DELETE /pk/bind
-        throw RemoteRepoError.notImplemented("DELETE /pk/bind")
+        try await CloudAPI.shared.pkUnbind()
     }
 
     // MARK: 周数据

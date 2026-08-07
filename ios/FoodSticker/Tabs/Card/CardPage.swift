@@ -174,6 +174,8 @@ typealias FontSize = CardTokens.FontSize
 // MARK: =====================================================================
 
 struct FoodSticker: Identifiable, Equatable {
+    /// 稳定标识：来自底层 DailyRecord.id，用于拖动位置持久化（id 仍用 UUID 兼容 Identifiable）
+    let recordId: String
     let id = UUID()
     let imageName: String
     /// 用户拍照/生成的真实贴纸图（优先于 imageName 渲染），用于保存/预设后回显
@@ -203,7 +205,8 @@ struct FoodSticker: Identifiable, Equatable {
          fiber: Int = 0,
          sugar: Int = 0,
          salt: Double = 0,
-         tip: String = "") {
+         tip: String = "",
+         recordId: String = "") {
         self.imageName = imageName
         self.uiImage = uiImage
         self.name = name
@@ -217,17 +220,30 @@ struct FoodSticker: Identifiable, Equatable {
         self.sugar = sugar
         self.salt = salt
         self.tip = tip
+        self.recordId = recordId
     }
 }
 
 struct BoardSticker: Identifiable {
-    let id = UUID()
+    /// 稳定 id：用 recordId，保证拖动后 SwiftUI 能复用同一 view（offset 不丢失），并作为位置持久化 key
+    let id: String
     let sticker: FoodSticker
     let left: CGFloat     // 0..1，相对板左边缘
     let top: CGFloat      // 0..1，相对板顶边缘
     let angle: Double
     let scale: Double
     let zIndex: Int
+
+    init(sticker: FoodSticker, left: CGFloat, top: CGFloat,
+         angle: Double, scale: Double, zIndex: Int) {
+        self.id = sticker.recordId.isEmpty ? UUID().uuidString : sticker.recordId
+        self.sticker = sticker
+        self.left = left
+        self.top = top
+        self.angle = angle
+        self.scale = scale
+        self.zIndex = zIndex
+    }
 }
 
 enum DiaryMode: String, CaseIterable {
@@ -326,10 +342,10 @@ enum CardMock {
 
 struct CardTopBar: View {
     let nickname: String
+    /// 当前显示的头像图片（.me 传当前用户头像，.him 传对方头像）
+    var avatarImage: UIImage? = nil
     /// 点击右侧「我的」头像入口（与首页顶部保持一致）
     var onProfileTap: (() -> Void)? = nil
-
-    @ObservedObject private var avatarStore = AvatarStore.shared
 
     var body: some View {
         // 与首页 TopBarView 统一：问候语 + 昵称(标题) / 副标题，右侧「我的」头像按钮
@@ -344,7 +360,7 @@ struct CardTopBar: View {
             }
             Spacer()
             Button(action: { onProfileTap?() }) {
-                AvatarView(avatarStore.avatarImage, size: 40)
+                AvatarView(avatarImage, size: 40)
             }
             .buttonStyle(.plain)
         }
@@ -561,6 +577,14 @@ struct StickerChipView: View {
     let sticker: FoodSticker
     let angle: Double
     let scale: Double
+    /// 当前贴纸在板上的相对位置（0..1），用于拖动结束时换算新位置
+    var left: CGFloat = 0.5
+    var top: CGFloat = 0.5
+    /// 板的像素尺寸，用于把拖动位移换算为相对位置
+    var boardW: CGFloat = 1
+    var boardH: CGFloat = 1
+    /// 拖动结束回调：(recordId, newLeft, newTop)，由上层持久化并触发重新布局
+    var onPositionChange: ((String, CGFloat, CGFloat) -> Void)? = nil
     var onTap: () -> Void
 
     @State private var offset = CGSize.zero
@@ -630,10 +654,15 @@ struct StickerChipView: View {
                 }
                 .onEnded { value in
                     if case .second(true, let drag?) = value {
-                        start = CGSize(width: start.width + drag.translation.width,
-                                       height: start.height + drag.translation.height)
-                        offset = start
+                        // 把拖动位移换算为相对板的 0..1 坐标，回写持久化
+                        guard boardW > 0, boardH > 0 else { return }
+                        let newLeft = left + drag.translation.width / boardW
+                        let newTop = top + drag.translation.height / boardH
+                        onPositionChange?(sticker.recordId, newLeft, newTop)
                     }
+                    // 重置 offset/start：位置已由上层 left/top 更新，offset 归零避免叠加
+                    start = .zero
+                    offset = .zero
                     dragging = false
                 }
         )
@@ -941,6 +970,8 @@ struct FoodBoardView: View {
     @Binding var selected: FoodSticker?
     let totalCalories: Int
     var onAddTap: (() -> Void)? = nil
+    /// 贴纸拖动结束回调：(recordId, newLeft, newTop)
+    var onPositionChange: ((String, CGFloat, CGFloat) -> Void)? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -997,7 +1028,12 @@ struct FoodBoardView: View {
                 ForEach(stickers) { bs in
                     StickerChipView(sticker: bs.sticker,
                                     angle: bs.angle,
-                                    scale: bs.scale) {
+                                    scale: bs.scale,
+                                    left: bs.left,
+                                    top: bs.top,
+                                    boardW: w,
+                                    boardH: h,
+                                    onPositionChange: onPositionChange) {
                         selected = bs.sticker
                     }
                     .position(x: bs.left * w, y: bs.top * h)
@@ -1041,6 +1077,8 @@ struct BellyCharacterView: View {
     @Binding var selected: FoodSticker?
     let totalCalories: Int
     var onAddTap: (() -> Void)? = nil
+    /// 贴纸拖动结束回调：(recordId, newLeft, newTop)，newLeft/newTop 为 0..1 相对板尺寸
+    var onPositionChange: ((String, CGFloat, CGFloat) -> Void)? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -1059,7 +1097,7 @@ struct BellyCharacterView: View {
                     .position(x: w / 2, y: totalH - 31)
 
                 // 胃壁板（z-[1]）
-                FoodBoardView(stickers: stickers, selected: $selected, totalCalories: totalCalories, onAddTap: onAddTap)
+                FoodBoardView(stickers: stickers, selected: $selected, totalCalories: totalCalories, onAddTap: onAddTap, onPositionChange: onPositionChange)
                     .frame(width: boardW, height: boardH)
                     .position(x: w / 2, y: padTop + boardH / 2)
 
@@ -1088,7 +1126,10 @@ struct BellyCharacterView: View {
 struct CalorieBudgetCard: View {
     let target: Int
     let consumed: Int
-    private var progress: CGFloat { CGFloat(min(consumed, target)) / CGFloat(max(target, 1)) }
+    private var progress: Double {
+        guard target > 0 else { return 0 }
+        return min(Double(consumed) / Double(target) * 100.0, 100.0)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1214,6 +1255,8 @@ struct StickerDetailView: View {
     let stickers: [FoodSticker]
     let initialIndex: Int
     var onDelete: (() -> Void)? = nil
+    /// 对方贴纸为只读模式：不可删除，分享功能暂未开发
+    var isReadOnly: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var current: Int
@@ -1222,14 +1265,25 @@ struct StickerDetailView: View {
     @State private var showShare = false
     @State private var toast: String?
 
-    init(stickers: [FoodSticker], initialIndex: Int, onDelete: (() -> Void)? = nil) {
+    init(stickers: [FoodSticker], initialIndex: Int, onDelete: (() -> Void)? = nil, isReadOnly: Bool = false) {
         self.stickers = stickers
         self.initialIndex = initialIndex
         self.onDelete = onDelete
+        self.isReadOnly = isReadOnly
         _current = State(initialValue: min(max(initialIndex, 0), max(stickers.count - 1, 0)))
     }
 
     private var sticker: FoodSticker { stickers[current % max(stickers.count, 1)] }
+
+    /// 日期格式化（与 DailyRecord.date 一致："M月d日"）
+    private let dayFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "M月d日"; return f
+    }()
+
+    /// 当前查看的贴纸是否属于今天：只有今天的食物才允许删除，过去日期只读
+    private var isCurrentStickerToday: Bool {
+        sticker.date == dayFmt.string(from: Date())
+    }
 
     // 营养成分网格（对齐 Web：碳水/蛋白质/脂肪/膳食纤维/糖/盐，全部以 g 展示，单位不折行）
     private var nutrients: [(label: String, value: String)] {
@@ -1498,16 +1552,21 @@ struct StickerDetailView: View {
             }
             .buttonStyle(ScaleButtonStyle())
             Spacer()
-            Button { showDelete = true } label: {
-                Image(systemName: "trash")
-                    .font(.app(size: 24))
-                    .foregroundColor(CardTokens.Color.primary)
-                    .frame(width: 48, height: 48)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            // 对方贴纸不可删除；过去日期的食物也不可删除（仅当天可删）
+            if !isReadOnly && isCurrentStickerToday {
+                Button { showDelete = true } label: {
+                    Image(systemName: "trash")
+                        .font(.app(size: 24))
+                        .foregroundColor(CardTokens.Color.primary)
+                        .frame(width: 48, height: 48)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                Spacer()
             }
-            .buttonStyle(ScaleButtonStyle())
-            Spacer()
-            Button { showShare = true } label: {
+            Button {
+                fireToast("还没想好，再等等")
+            } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.app(size: 24))
                     .foregroundColor(CardTokens.Color.primary)
@@ -1668,6 +1727,14 @@ struct CardPageView: View {
     @State private var selectedDay = Date()
     @State private var selected: FoodSticker?
     @State private var calendarResetID = UUID()
+    /// 胃壁贴纸拖动位置持久化：[recordId: [left, top]]，跨刷新/重启保留用户拖动后的位置
+    @State private var boardPositions: [String: [CGFloat]] = {
+        if let data = UserDefaults.standard.data(forKey: "fs_boardPositions"),
+           let dict = try? JSONDecoder().decode([String: [CGFloat]].self, from: data) {
+            return dict
+        }
+        return [:]
+    }()
     /// 点击顶部「我的」头像入口
     var onProfile: (() -> Void)? = nil
     /// 点击空状态「+」或需要添加食物 → 唤起拍摄
@@ -1676,7 +1743,7 @@ struct CardPageView: View {
         if mode == .me {
             // 优先 AvatarStore（全站中枢），回退 profile.name
             let avatarName = avatarStore.nickname
-            if avatarName != "未登录" && !avatarName.isEmpty { return avatarName }
+            if avatarName != "游客" && !avatarName.isEmpty { return avatarName }
             return store.profile.name.isEmpty ? "我" : store.profile.name
         } else {
             return store.partnerProfile.name.isEmpty ? "对方" : store.partnerProfile.name
@@ -1698,27 +1765,47 @@ struct CardPageView: View {
             .filter { $0.type == .food && $0.date == selectedLabel }
             .map {
                 FoodSticker(imageName: "",
-                            uiImage: $0.imageData.flatMap { UIImage(data: $0) },
+                            uiImage: $0.loadImage(),
                             name: $0.name, cal: $0.calories,
                             date: $0.date, time: $0.time,
                             protein: $0.protein, carbs: $0.carbs, fat: $0.fat,
-                            fiber: $0.fiber, sugar: $0.sugar, salt: $0.salt, tip: $0.tip)
+                            fiber: $0.fiber, sugar: $0.sugar, salt: $0.salt, tip: $0.tip,
+                            recordId: $0.id)
             }
     }
 
-    // 胃壁板：把当前选中日期的真实贴纸错落摆放（已清空 Mock，仅展示真实数据）
+    // 胃壁板：把当前选中日期的真实贴纸错落摆放。
+    // 位置优先取用户拖动后持久化的值；否则用预设的分散位置（基于 index 取模，确定性，不随其他贴纸移动而漂移）。
     private var boardStickers: [BoardSticker] {
-        foodStickers.enumerated().map { i, s in
-            // 在板右上角区域错落摆放真实贴纸
-            let lefts: [CGFloat] = [0.30, 0.62, 0.45, 0.78, 0.20]
-            let tops:  [CGFloat] = [0.30, 0.45, 0.62, 0.72, 0.18]
-            let idx = i % lefts.count
+        // 预设 8 个分散槽位，间距足够大避免重叠；超出 8 个则取模复用（同位贴纸由 zIndex/角度区分）
+        let slots: [(CGFloat, CGFloat)] = [
+            (0.22, 0.22), (0.68, 0.28), (0.42, 0.52), (0.80, 0.60),
+            (0.18, 0.62), (0.58, 0.75), (0.78, 0.38), (0.32, 0.80)
+        ]
+        return foodStickers.enumerated().map { i, s in
+            let idx = i % slots.count
+            var left = slots[idx].0
+            var top = slots[idx].1
+            // 有持久化位置则直接用（用户已拖动过）
+            if let saved = boardPositions[s.recordId], saved.count >= 2 {
+                left = saved[0]; top = saved[1]
+            }
             return BoardSticker(sticker: s,
-                                left: lefts[idx],
-                                top: tops[idx],
-                                angle: Double(idx * 7 - 14),
+                                left: left,
+                                top: top,
+                                angle: Double(idx * 9 - 18),
                                 scale: 0.82,
                                 zIndex: 10 + i)
+        }
+    }
+
+    /// 拖动结束后回写贴纸位置并持久化
+    private func saveBoardPosition(recordId: String, left: CGFloat, top: CGFloat) {
+        let clampedLeft = max(0.05, min(0.95, left))
+        let clampedTop = max(0.05, min(0.9, top))
+        boardPositions[recordId] = [clampedLeft, clampedTop]
+        if let data = try? JSONEncoder().encode(boardPositions) {
+            UserDefaults.standard.set(data, forKey: "fs_boardPositions")
         }
     }
 
@@ -1729,7 +1816,9 @@ struct CardPageView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: CardTokens.Spacing.section) {
-                CardTopBar(nickname: nickname, onProfileTap: onProfile)
+                CardTopBar(nickname: nickname,
+                           avatarImage: mode == .me ? avatarStore.avatarImage : store.partnerProfile.avatarImage,
+                           onProfileTap: onProfile)
 
                 // 今天 + 我的/对方的 + 回到今日
                 HStack {
@@ -1742,6 +1831,8 @@ struct CardPageView: View {
                         Button(action: {
                             selectedDay = Date()
                             calendarResetID = UUID()
+                            // 回到今日时自动刷新云端数据
+                            Task { await store.refresh() }
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.uturn.backward")
@@ -1780,7 +1871,9 @@ struct CardPageView: View {
 
                 // 同一份数据实例：胃壁、列表、详情共用，避免 id 不一致导致详情定位错位
                 let foods = foodStickers
-                BellyCharacterView(stickers: foods.isEmpty ? [] : boardStickers, selected: $selected, totalCalories: boardCalories, onAddTap: onAddTap)
+                BellyCharacterView(stickers: foods.isEmpty ? [] : boardStickers, selected: $selected, totalCalories: boardCalories, onAddTap: onAddTap, onPositionChange: { recordId, left, top in
+                    saveBoardPosition(recordId: recordId, left: left, top: top)
+                })
 
                 CalorieBudgetCard(
                     target: AppDataStore.shared.calorieTarget,
@@ -1796,33 +1889,65 @@ struct CardPageView: View {
             }
         }
         .background(CardTokens.Color.background)
-        // todayRecords / savedStickers / selectedDay / mode 变更 → 刷新依赖子视图
+        .refreshable {
+            // 用 detached Task 确保 refresh 不被视图重建（如 calendarResetID 变化）取消
+            await Task.detached { @MainActor in
+                await store.refresh()
+            }.value
+        }
         .onChange(of: store.todayRecords.count) { _ in }
+        .onChange(of: store.partnerRecords.count) { _ in }
         .onChange(of: store.savedStickers.count) { _ in }
         .onChange(of: selectedDay) { _ in }
-        .onChange(of: mode) { _ in }
+        .onChange(of: mode, perform: onModeChanged)
         .fullScreenCover(item: $selected) { sticker in
-            // 使用与列表/胃壁同一份实例，保证点击定位精准（不会回退到第 0 个）
-            let stickers = foodStickers
-            let idx = stickers.firstIndex(where: { $0.id == sticker.id })
-                ?? stickers.firstIndex(where: { $0.name == sticker.name && $0.cal == sticker.cal && $0.time == sticker.time })
-                ?? 0
-            StickerDetailView(stickers: stickers, initialIndex: idx, onDelete: {
-                // 仅在「我的」模式下允许删除；对方记录仅可查看
-                guard mode == .me else {
-                    selected = nil
-                    return
-                }
-                let target = sticker
-                let source = store.todayRecords
-                if let record = source.first(where: {
-                    $0.name == target.name && $0.calories == target.cal &&
-                    $0.date == target.date && $0.time == target.time
-                }) {
-                    store.removeRecord(record.id)
-                }
-                selected = nil
-            })
+            detailView(for: sticker)
+        }
+    }
+
+    // MARK: - 详情页构建（从 fullScreenCover 中提取以降低编译器类型推导复杂度）
+
+    private func detailView(for sticker: FoodSticker) -> some View {
+        let stickers = foodStickers
+        let idx = stickerIndex(in: stickers, for: sticker)
+        return StickerDetailView(
+            stickers: stickers,
+            initialIndex: idx,
+            onDelete: { handleStickerDelete(sticker) },
+            isReadOnly: mode == .him
+        )
+    }
+
+    private func stickerIndex(in stickers: [FoodSticker], for sticker: FoodSticker) -> Int {
+        if let i = stickers.firstIndex(where: { $0.id == sticker.id }) { return i }
+        if let i = stickers.firstIndex(where: { $0.name == sticker.name && $0.cal == sticker.cal && $0.time == sticker.time }) { return i }
+        return 0
+    }
+
+    private func handleStickerDelete(_ sticker: FoodSticker) {
+        guard mode == .me else {
+            selected = nil
+            return
+        }
+        // 仅允许删除当天的食物，过去日期不可删除
+        let todayLabel = dayFmt.string(from: Date())
+        guard sticker.date == todayLabel else {
+            selected = nil
+            return
+        }
+        if let record = store.todayRecords.first(where: { r in
+            r.name == sticker.name && r.calories == sticker.cal &&
+            r.date == sticker.date && r.time == sticker.time
+        }) {
+            store.removeRecord(record.id)
+        }
+        selected = nil
+    }
+
+    /// 切换到「对方的」模式时自动刷新云端数据
+    private func onModeChanged(_ newMode: DiaryMode) {
+        if newMode == .him {
+            Task { await store.refresh() }
         }
     }
 }

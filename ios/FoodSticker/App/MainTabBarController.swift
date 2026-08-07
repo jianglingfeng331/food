@@ -206,6 +206,13 @@ final class MainTabBarController: UIViewController {
     @objc private func tabTapped(_ sender: UIButton) {
         let index = sender.tag
         guard index != currentIndex else { return }
+        // PK Tab（index=2）需登录
+        if index == 2, !AuthService.shared.isLoggedIn {
+            AuthCoordinator.shared.requireLogin(from: self) { [weak self] in
+                self?.selectTab(index: index, animated: true)
+            }
+            return
+        }
         selectTab(index: index, animated: true)
     }
 

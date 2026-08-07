@@ -1,73 +1,84 @@
 import Foundation
-import Combine
 
-// MARK: - PK 对手模型
-
-struct PKOpponent: Codable, Equatable {
-    let uid: String
-    var nickname: String
-    var avatar: String
-    var boundAt: Date
-}
-
-// MARK: - PK 绑定状态
-
-@available(iOS 13.0, *)
-enum PKRelationState {
-    case none                                  // 未绑定
-    case bound(PKOpponent)                     // 已绑定对手
-}
-
-// MARK: - PK 关系服务（Mock 持久化）
-
-/// 负责 PK 绑定 / 解绑 / 状态查询。
-/// Mock 阶段用 UserDefaults 持久化；真实上线可改为云端关系。
-/// 与当前登录用户绑定：游客态无绑定关系（需先登录）。
+/// PK 绑定关系服务。
+/// 改造后：绑定关系以云端为准（数据库落地，跨设备实时同步），
+/// 同时在本地 UserDefaults 缓存一份，断网时也能展示上次状态。
+@MainActor
 final class PKRelationService {
-
     static let shared = PKRelationService()
 
-    @Published private(set) var opponent: PKOpponent?
+    @Published private(set) var partner: BindingPartner?
+    private let cacheKey = "pk_relation_partner"
 
-    private let key = "pk_relation_opponent"
+    struct BindingPartner: Identifiable, Equatable {
+        let id: String        // uid
+        let nickname: String
+        let avatar: String    // emoji
+    }
 
     private init() {
-        if let data = UserDefaults.standard.data(forKey: key),
-           let op = try? JSONDecoder().decode(PKOpponent.self, from: data) {
-            opponent = op
+        // 不再在初始化时加载旧缓存，避免 PK 页打开时闪现旧对手
+        // 缓存仅在断网时兜底使用，refresh() 失败时会自动保留旧状态
+    }
+
+    // MARK: - 本地缓存（断网兜底）
+
+    private func loadCache() {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey),
+              let d = try? JSONDecoder().decode(CacheModel.self, from: data) else { return }
+        partner = BindingPartner(id: d.uid, nickname: d.nickname, avatar: d.avatar)
+    }
+
+    private func saveCache(_ p: BindingPartner?) {
+        if let p {
+            let m = CacheModel(uid: p.id, nickname: p.nickname, avatar: p.avatar)
+            UserDefaults.standard.set(try? JSONEncoder().encode(m), forKey: cacheKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: cacheKey)
         }
     }
 
-    @available(iOS 13.0, *)
-    var state: PKRelationState { opponent.map { .bound($0) } ?? .none }
-
-    /// 通过扫到的绑定码发起绑定。 Mock：直接建立本地关系。
-    /// 真实场景：将 code.uid 上报云端，云端确认双方互绑。
-    func bind(by code: PKCode) {
-        let op = PKOpponent(uid: code.uid, nickname: code.nick,
-                            avatar: code.av.isEmpty ? "🙂" : code.av,
-                            boundAt: Date())
-        opponent = op
-        persist(op)
-        NotificationCenter.default.post(name: .pkRelationChanged, object: nil)
+    private struct CacheModel: Codable {
+        let uid: String; let nickname: String; let avatar: String
     }
 
-    /// 手动输入绑定码绑定（兜底入口）。
-    func bind(rawPayload: String) -> Bool {
-        guard let code = PKCode.parse(rawPayload) else { return false }
-        bind(by: code)
-        return true
-    }
+    // MARK: - 云端操作
 
-    func unbind() {
-        opponent = nil
-        UserDefaults.standard.removeObject(forKey: key)
-        NotificationCenter.default.post(name: .pkRelationChanged, object: nil)
-    }
-
-    private func persist(_ op: PKOpponent) {
-        if let data = try? JSONEncoder().encode(op) {
-            UserDefaults.standard.set(data, forKey: key)
+    /// 从云端拉取当前绑定关系并刷新本地状态。
+    @MainActor
+    func refresh() async {
+        guard CloudAPI.shared.isLoggedIn else { return }
+        do {
+            let rel = try await CloudAPI.shared.pkRelation()
+            let p = rel.partner.map {
+                BindingPartner(id: $0.uid, nickname: $0.nickname, avatar: $0.avatar)
+            }
+            partner = p
+            saveCache(p)
+        } catch {
+            // 网络失败：保留本地缓存状态，不报错打扰用户
+            Log("[PKRelation] refresh failed: \(error.localizedDescription)")
         }
     }
+
+    /// 绑定对方（传入 PKCode 解析出的 uid）。
+    @MainActor
+    func bind(_ code: PKCode) async throws {
+        let partnerInfo = try await CloudAPI.shared.pkBind(targetUID: code.uid)
+        let p = BindingPartner(id: partnerInfo.uid,
+                               nickname: partnerInfo.nickname,
+                               avatar: partnerInfo.avatar)
+        partner = p
+        saveCache(p)
+    }
+
+    /// 解绑。
+    @MainActor
+    func unbind() async throws {
+        try await CloudAPI.shared.pkUnbind()
+        partner = nil
+        saveCache(nil)
+    }
+
+    var isBound: Bool { partner != nil }
 }

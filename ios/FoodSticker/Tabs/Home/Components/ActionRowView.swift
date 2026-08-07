@@ -120,12 +120,12 @@ struct ActionRowView: View {
             Image(systemName: "plus")
                 .font(.app(size: HomeTokens.Size.tinyIcon,
                               weight: HomeTokens.FontWeight.bold))
-                .foregroundColor(HomeTokens.Color.primary)
+                .foregroundColor(.white)
                 .frame(width: HomeTokens.Size.plusButton,
                        height: HomeTokens.Size.plusButton)
                 .background(
                     Circle()
-                        .fill(HomeTokens.Color.background)
+                        .fill(Color(hex: 0x333333))
                 )
         }
     }

@@ -13,6 +13,7 @@ struct DashboardData: Sendable {
     let opponentNickname: String?
     let opponentAvatarURL: String?
     let opponentScore: Int?
+    let opponentCalorieGoal: Int?
     let opponentIsLeader: Bool
 
     // PK 本周概要
@@ -145,6 +146,20 @@ struct StickerNutrition: Sendable {
     let dietaryFiberG: Double
     let sodiumMg: Double
     let vitaminTips: String
+
+    init(kcalPer100g: Double = 0, proteinG: Double = 0, carbG: Double = 0,
+         fatG: Double = 0, typicalPortionG: Double = 0,
+         dietaryFiberG: Double = 0, sodiumMg: Double = 0,
+         vitaminTips: String = "") {
+        self.kcalPer100g = kcalPer100g
+        self.proteinG = proteinG
+        self.carbG = carbG
+        self.fatG = fatG
+        self.typicalPortionG = typicalPortionG
+        self.dietaryFiberG = dietaryFiberG
+        self.sodiumMg = sodiumMg
+        self.vitaminTips = vitaminTips
+    }
 }
 
 /// PK 数据仓库

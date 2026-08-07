@@ -34,8 +34,16 @@ final class AuthCoordinator {
         vc.present(nav, animated: true)
     }
 
-    func dismissLogin() {
-        loginNav?.dismiss(animated: true)
-        loginNav = nil
+    func dismissLogin(completion: (() -> Void)? = nil) {
+        guard let nav = loginNav else {
+            // loginNav 为 nil 时（如 app 重启后），直接执行 completion
+            // 确保登录后的回调（通知、bootstrap）仍然执行
+            completion?()
+            return
+        }
+        nav.dismiss(animated: true) { [weak self] in
+            self?.loginNav = nil
+            completion?()
+        }
     }
 }

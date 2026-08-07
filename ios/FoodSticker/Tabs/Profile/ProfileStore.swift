@@ -30,6 +30,9 @@ final class ProfileStore: ObservableObject {
 
     private let defaults = UserDefaults.standard
 
+    /// 登录用户昵称（注册/登录成功后由 AuthService 同步，供个人中心使用）
+    @Published var profileName: String = ""
+
     // MARK: 初始化（含 Mock 种子数据）
 
     private init() {
@@ -45,7 +48,7 @@ final class ProfileStore: ObservableObject {
         if let loaded = defaults.decode([WeightPoint].self, key: "profile_weightHistory") {
             weightHistory = loaded
         } else {
-            // 生成最近 14 天一条缓降曲线（Mock）
+            // 生成最近 14 天一条缓降曲线（Mock 种子，仅用于未登录游客演示）
             let cal = Calendar.current
             let today = Date()
             var pts: [WeightPoint] = []
@@ -56,6 +59,8 @@ final class ProfileStore: ObservableObject {
                 pts.append(WeightPoint(date: d, weight: round((base + jitter) * 10) / 10))
             }
             weightHistory = pts
+            // 标记这是种子数据，登录后/用户主动设置前应被清空
+            defaults.set(true, forKey: "profile_seed")
         }
 
         if let loaded = defaults.decode([WorkoutItem].self, key: "profile_workouts") {
@@ -102,6 +107,49 @@ final class ProfileStore: ObservableObject {
 
     // MARK: 写操作（自动持久化）
 
+    /// 同步登录用户昵称（注册/登录成功后调用，确保「我的」页即时显示）
+    func setLoggedInNickname(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        profileName = trimmed.isEmpty ? profileName : trimmed
+    }
+
+    /// 首页/弹窗记录体重时同步写入历史（用于趋势图即时刷新）
+    func addWeightPoint(_ kg: Double) {
+        guard kg > 0 else { return }
+        let today = WeightPoint(date: Date(), weight: kg)
+        if let idx = weightHistory.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: today.date) }) {
+            weightHistory[idx] = today
+        } else {
+            weightHistory.append(today)
+            weightHistory.sort { $0.date < $1.date }
+        }
+        currentWeight = kg
+        defaults.save(weightHistory, key: "profile_weightHistory")
+        defaults.save(currentWeight, key: "profile_currentWeight")
+        // 用户主动记录体重后，不再是种子数据
+        defaults.set(false, forKey: "profile_seed")
+    }
+
+    /// 清空游客态遗留的种子数据（体重历史曲线、目标/身高等），
+    /// 仅在「数据确为种子（用户尚未主动设置过）」时生效，
+    /// 避免把已登录老用户的真实数据误清。
+    func clearGuestData() {
+        guard defaults.bool(forKey: "profile_seed") else { return }
+        currentWeight = 0
+        targetWeight = 0
+        heightCm = 0
+        weightHistory = []
+        defaults.removeObject(forKey: "profile_currentWeight")
+        defaults.removeObject(forKey: "profile_targetWeight")
+        defaults.removeObject(forKey: "profile_height")
+        defaults.removeObject(forKey: "profile_weightHistory")
+        // 运动计划恢复成默认模板（不保留上一用户勾选状态）
+        workouts = WorkoutItem.seed()
+        defaults.save(workouts, key: "profile_workouts")
+        // 种子已清除，后续不再当作种子处理
+        defaults.set(false, forKey: "profile_seed")
+    }
+
     func saveGoals() {
         defaults.save(heightCm, key: "profile_height")
         defaults.save(currentWeight, key: "profile_currentWeight")
@@ -115,6 +163,8 @@ final class ProfileStore: ObservableObject {
             weightHistory.sort { $0.date < $1.date }
         }
         defaults.save(weightHistory, key: "profile_weightHistory")
+        // 用户主动设置过资料，数据不再是种子，禁止被 clearGuestData 误清
+        defaults.set(false, forKey: "profile_seed")
     }
 
     func toggleWorkout(_ id: UUID) {
@@ -130,6 +180,36 @@ final class ProfileStore: ObservableObject {
         defaults.save(weighReminderTime, key: "reminder_weigh_time")
         defaults.save(exerciseReminderOn, key: "reminder_exercise_on")
         defaults.save(exerciseReminderTime, key: "reminder_exercise_time")
+    }
+
+    // MARK: - 从云端恢复（登录后 sync 调用）
+
+    /// 从云端恢复减脂目标数据。仅写内存 + UserDefaults，不触发其他副作用。
+    /// 用于重装 app 后从云端拉取用户资料并恢复到本地。
+    /// 云端值为 0 时不覆盖本地已有值（云端可能未设置）。
+    func restoreFromCloud(currentWeight: Double, targetWeight: Double, height: Double) {
+        if currentWeight > 0 {
+            self.currentWeight = currentWeight
+            defaults.save(currentWeight, key: "profile_currentWeight")
+        }
+        if targetWeight > 0 {
+            self.targetWeight = targetWeight
+            defaults.save(targetWeight, key: "profile_targetWeight")
+        }
+        if height > 0 {
+            self.heightCm = height
+            defaults.save(height, key: "profile_height")
+        }
+        // 云端数据已恢复，不再是种子数据
+        defaults.set(false, forKey: "profile_seed")
+    }
+
+    /// 从云端恢复体重历史曲线（用于趋势图）。
+    func restoreWeightHistory(_ points: [WeightPoint]) {
+        guard !points.isEmpty else { return }
+        weightHistory = points.sorted { $0.date < $1.date }
+        defaults.save(weightHistory, key: "profile_weightHistory")
+        defaults.set(false, forKey: "profile_seed")
     }
 
     /// 修改昵称 / 头像：回写到登录态（AuthService），个人中心即时刷新
