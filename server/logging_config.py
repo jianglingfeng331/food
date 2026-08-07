@@ -43,7 +43,9 @@ def setup_logging() -> None:
             }
             if record["extra"]:
                 log_entry["extra"] = {k: v for k, v in record["extra"].items()}
-            return _json.dumps(log_entry, default=str, ensure_ascii=False) + "\n"
+            # loguru 会再次对 format 返回值做 format_map，转义花括号避免 JSON 的 {} 被当作占位符
+            raw = _json.dumps(log_entry, default=str, ensure_ascii=False) + "\n"
+            return raw.replace("{", "{{").replace("}", "}}")
 
         loguru.logger.add(
             os.path.join(LOG_DIR, "api_{time:YYYY-MM-DD}.json.log"),
