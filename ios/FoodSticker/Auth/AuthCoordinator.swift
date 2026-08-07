@@ -35,13 +35,27 @@ final class AuthCoordinator {
     }
 
     func dismissLogin(completion: (() -> Void)? = nil) {
-        guard let nav = loginNav else {
-            // loginNav 为 nil 时（如 app 重启后），直接执行 completion
-            // 确保登录后的回调（通知、bootstrap）仍然执行
-            completion?()
+        // 不依赖单例 loginNav（易失配），直接从窗口根控制器找到当前最顶层的 modal 来关闭
+        // 这样无论 loginNav 是否被覆盖，都能正确关闭登录弹窗
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first else {
+            // 取不到窗口（极端情况），回退到 loginNav 兜底
+            if let nav = loginNav {
+                nav.dismiss(animated: true) { [weak self] in
+                    self?.loginNav = nil
+                    completion?()
+                }
+            } else {
+                completion?()
+            }
             return
         }
-        nav.dismiss(animated: true) { [weak self] in
+        var top = window.rootViewController
+        while let presented = top?.presentedViewController {
+            top = presented
+        }
+        top?.dismiss(animated: true) { [weak self] in
             self?.loginNav = nil
             completion?()
         }

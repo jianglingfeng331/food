@@ -462,7 +462,9 @@ final class CloudAPI {
 
     /// 看图识别完整营养（服务端 VLM 代理，密钥仅存服务端）。使用长超时（60s）。
     func recognizeNutrition(image: UIImage) async throws -> FoodNutritionModel {
-        let jpeg = image.resized(maxSide: 1024).jpegData(compressionQuality: 0.7)!
+        guard let jpeg = image.resized(maxSide: 1024).jpegData(compressionQuality: 0.7) else {
+            throw NSError(domain: "CloudAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片格式无效，无法识别"])
+        }
         struct Req: Encodable { let image_b64: String }
         let data = try await authedAI("/food/recognize", method: "POST",
                                        body: Req(image_b64: jpeg.base64EncodedString()))

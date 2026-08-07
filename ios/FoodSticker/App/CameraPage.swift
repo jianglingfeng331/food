@@ -965,7 +965,12 @@ struct CameraPage: View {
         camera.capturePhoto { image in
             DispatchQueue.main.async {
                 guard let image else {
-                    self.store.update(id) { $0.status = .done; $0.error = "拍摄失败，请重试" }
+                    self.store.update(id) {
+                        $0.status = .done
+                        $0.error = "拍摄失败，请重试"
+                        $0.cloudError = NSError(domain: "Capture", code: -1, userInfo: [NSLocalizedDescriptionKey: "拍摄失败，请重试"])
+                        $0.cloudDone = true
+                    }
                     return
                 }
                 self.store.update(id) { $0.sourceImage = image; $0.preview = image }
@@ -1377,6 +1382,8 @@ fileprivate func openFoodStickerResult(task: CaptureTask) {
     // 已缓存云端结果：直接复用，零额外请求
     if task.cloudNutrition != nil { return }
     if task.cloudError != nil { return }
+    // 拍摄本身失败（无有效图片）：直接进详情页展示错误，不再请求识别
+    if task.error != nil { return }
 
     // cloudDone 但无结果：用已识别的本地面值兜底写回缓存，详情页会自动刷新
     if task.cloudDone {

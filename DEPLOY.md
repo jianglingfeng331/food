@@ -2,6 +2,11 @@
 
 > 本文档记录首次部署、后期更新、常见问题排查的完整流程。
 > 适用于阿里云 ECS（Ubuntu 22.04）+ 域名 rubyace.love。
+>
+> ⚠️ **命令执行位置**：
+> - `ssh root@101.37.210.127` 开头的命令 → 先 SSH 登录服务器，在**服务器终端**执行
+> - 标注「本地 Mac」的命令 → 在你的 Mac 终端执行
+> - 涉及 `systemctl`、`/opt/fitfoodpk`、`journalctl`、`certbot`、`nginx` 的命令 → 一律在**服务器**执行
 
 ---
 

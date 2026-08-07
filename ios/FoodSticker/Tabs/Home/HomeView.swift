@@ -89,7 +89,12 @@ struct HomeView: View {
 
     // MARK: 热量卡
 
-    private var intake: Int { AuthService.shared.isLoggedIn ? store.todayCaloriesConsumed : 0 }
+    private var intake: Int {
+        guard AuthService.shared.isLoggedIn else { return 0 }
+        // 云端今日摄入优先（贴纸页写入云端后，首页需同步显示）
+        // 云端尚未返回(nil)时回退本地，保证首帧和离线可用
+        return dashboardData?.todayCalorieIntake ?? store.todayCaloriesConsumed
+    }
     private var calorieTarget: Int { (isGuest || store.calorieTarget == 0) ? 2000 : store.calorieTarget }
     private var exerciseCals: Int { isGuest ? 0 : store.todayExerciseCalories }
     private var burned: Int { exerciseCals }

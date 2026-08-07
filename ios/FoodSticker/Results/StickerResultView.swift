@@ -283,6 +283,12 @@ struct StickerResultView: View {
                         .foregroundColor(SRTheme.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
+                } else if let errMsg = task?.error {
+                    Text(errMsg)
+                        .font(.srText(SRTheme.Font.status))
+                        .foregroundColor(SRTheme.error)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
                 } else {
                     ProgressView("识别生成中…")
                         .font(.srText(SRTheme.Font.status))
