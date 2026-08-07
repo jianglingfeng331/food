@@ -6,7 +6,7 @@ struct WorkoutPlanView: View {
     @StateObject private var store = ProfileStore.shared
 
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
                 let done = store.workouts.filter { $0.done }.count
                 VStack(spacing: 8) {

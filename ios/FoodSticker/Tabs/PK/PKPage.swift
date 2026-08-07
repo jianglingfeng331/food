@@ -1142,7 +1142,7 @@ struct PKPageView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CardTopBar(nickname: nickname, onProfileTap: onProfile)
+            CardTopBar(nickname: nickname, avatarImage: avatarStore.avatarImage, onProfileTap: onProfile)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: PKTokens.Layout.sectionGap) {

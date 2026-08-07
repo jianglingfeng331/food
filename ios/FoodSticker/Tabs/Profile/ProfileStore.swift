@@ -48,19 +48,8 @@ final class ProfileStore: ObservableObject {
         if let loaded = defaults.decode([WeightPoint].self, key: "profile_weightHistory") {
             weightHistory = loaded
         } else {
-            // 生成最近 14 天一条缓降曲线（Mock 种子，仅用于未登录游客演示）
-            let cal = Calendar.current
-            let today = Date()
-            var pts: [WeightPoint] = []
-            for i in (0...13).reversed() {
-                guard let d = cal.date(byAdding: .day, value: -i, to: today) else { continue }
-                let base = seedCurrent + Double(i) * 0.45   // 越久之前越重
-                let jitter = Double.random(in: -0.3...0.3)
-                pts.append(WeightPoint(date: d, weight: round((base + jitter) * 10) / 10))
-            }
-            weightHistory = pts
-            // 标记这是种子数据，登录后/用户主动设置前应被清空
-            defaults.set(true, forKey: "profile_seed")
+            // 不再生成 Mock 假数据，新用户初始为空
+            weightHistory = []
         }
 
         if let loaded = defaults.decode([WorkoutItem].self, key: "profile_workouts") {
@@ -126,15 +115,17 @@ final class ProfileStore: ObservableObject {
         currentWeight = kg
         defaults.save(weightHistory, key: "profile_weightHistory")
         defaults.save(currentWeight, key: "profile_currentWeight")
-        // 用户主动记录体重后，不再是种子数据
-        defaults.set(false, forKey: "profile_seed")
     }
 
-    /// 清空游客态遗留的种子数据（体重历史曲线、目标/身高等），
-    /// 仅在「数据确为种子（用户尚未主动设置过）」时生效，
-    /// 避免把已登录老用户的真实数据误清。
+    /// 清空游客态遗留的数据（体重历史曲线、目标/身高等）。
+    /// 基于 uid 比较：仅当登录用户变化（新登录/切换账号）时才清理，
+    /// 避免老用户重启 App 时误清真实数据。
     func clearGuestData() {
-        guard defaults.bool(forKey: "profile_seed") else { return }
+        let currentUid = AuthService.shared.currentUser?.uid ?? ""
+        let lastUid = defaults.string(forKey: "profile_last_uid") ?? ""
+        // uid 相同（同一用户重启）→ 不清理
+        guard currentUid != lastUid else { return }
+        // uid 变化（新登录/换账号）→ 清理游客/上一用户残留
         currentWeight = 0
         targetWeight = 0
         heightCm = 0
@@ -146,8 +137,8 @@ final class ProfileStore: ObservableObject {
         // 运动计划恢复成默认模板（不保留上一用户勾选状态）
         workouts = WorkoutItem.seed()
         defaults.save(workouts, key: "profile_workouts")
-        // 种子已清除，后续不再当作种子处理
-        defaults.set(false, forKey: "profile_seed")
+        // 记录当前 uid，下次同一用户重启不再清理
+        defaults.set(currentUid, forKey: "profile_last_uid")
     }
 
     func saveGoals() {
@@ -163,8 +154,6 @@ final class ProfileStore: ObservableObject {
             weightHistory.sort { $0.date < $1.date }
         }
         defaults.save(weightHistory, key: "profile_weightHistory")
-        // 用户主动设置过资料，数据不再是种子，禁止被 clearGuestData 误清
-        defaults.set(false, forKey: "profile_seed")
     }
 
     func toggleWorkout(_ id: UUID) {
@@ -200,8 +189,6 @@ final class ProfileStore: ObservableObject {
             self.heightCm = height
             defaults.save(height, key: "profile_height")
         }
-        // 云端数据已恢复，不再是种子数据
-        defaults.set(false, forKey: "profile_seed")
     }
 
     /// 从云端恢复体重历史曲线（用于趋势图）。
@@ -209,7 +196,6 @@ final class ProfileStore: ObservableObject {
         guard !points.isEmpty else { return }
         weightHistory = points.sorted { $0.date < $1.date }
         defaults.save(weightHistory, key: "profile_weightHistory")
-        defaults.set(false, forKey: "profile_seed")
     }
 
     /// 修改昵称 / 头像：回写到登录态（AuthService），个人中心即时刷新

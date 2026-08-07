@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - 真实后端认证实现（短信验证码 + 手机号注册/登录）
 
@@ -54,6 +55,8 @@ final class CloudAuthProvider: AuthProvider {
             let u: CloudAPI.CkUser = try await retryOnNetwork {
                 try await api.login(userID: phone, password: password)
             }
+            // 登录成功后立刻恢复头像（不等 sync），让首页/贴纸/PK 顶栏即时显示
+            restoreAvatarIfPresent(u.avatarB64)
             return AuthUser(uid: u.id, phone: phone, nickname: u.name,
                             avatar: u.avatar, loginType: .password)
         } catch let e as CloudAPI.CloudError {
@@ -71,6 +74,8 @@ final class CloudAuthProvider: AuthProvider {
             let u: CloudAPI.CkUser = try await retryOnNetwork {
                 try await api.register(userID: userID, password: password, name: name)
             }
+            // 注册成功后立刻恢复头像（不等 sync），让首页/贴纸/PK 顶栏即时显示
+            restoreAvatarIfPresent(u.avatarB64)
             return AuthUser(uid: u.id, phone: userID, nickname: u.name,
                             avatar: u.avatar, loginType: .register)
         } catch let e as CloudAPI.CloudError {
@@ -110,6 +115,13 @@ final class CloudAuthProvider: AuthProvider {
             avatar: u.avatar,
             loginType: loginType
         )
+    }
+
+    private func restoreAvatarIfPresent(_ avatarB64: String?) {
+        guard let b64 = avatarB64, !b64.isEmpty,
+              let data = Data(base64Encoded: b64),
+              let img = UIImage(data: data) else { return }
+        Task { @MainActor in AvatarStore.shared.restoreFromCloud(img) }
     }
 
     private func mapError(_ e: CloudAPI.CloudError) -> AuthError {

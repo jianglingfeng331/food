@@ -123,6 +123,7 @@ struct DailyRecord: Identifiable, Codable {
         try c.encode(unit, forKey: .unit)
         try c.encode(time, forKey: .time)
         try c.encode(date, forKey: .date)
+        try c.encode(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(imageFileName, forKey: .imageFileName)
         try c.encode(protein, forKey: .protein)
         try c.encode(carbs, forKey: .carbs)
@@ -1209,17 +1210,19 @@ final class AppDataStore: ObservableObject {
                 $0.id != record.id &&
                 $0.type == record.type &&
                 $0.name == record.name &&
+                $0.date == record.date &&
                 $0.time == record.time &&
                 $0.calories == record.calories
             }) {
                 todayRecords[idx].id = record.id
-                // 同步更新图片文件名
+                // 同步更新图片文件名（仅在 moveItem 成功时才更新引用）
                 if let oldFn = todayRecords[idx].imageFileName {
                     let oldURL = Self.stickerImagesDir.appendingPathComponent(oldFn)
                     let newFn = "\(record.id).jpg"
                     let newURL = Self.stickerImagesDir.appendingPathComponent(newFn)
-                    try? FileManager.default.moveItem(at: oldURL, to: newURL)
-                    todayRecords[idx].imageFileName = newFn
+                    if (try? FileManager.default.moveItem(at: oldURL, to: newURL)) != nil {
+                        todayRecords[idx].imageFileName = newFn
+                    }
                 }
                 continue
             }
@@ -1273,15 +1276,13 @@ final class AppDataStore: ObservableObject {
         profile.currentWeight = localWeight > 0 ? localWeight : u.currentWeight
         profile.targetWeight = u.targetWeight
         profile.height = u.height
-        // 解码图片头像
-        var cloudAvatar: UIImage? = nil
+        // 解码图片头像（云端为空时保留本地已有头像，避免上传失败后被清空）
         if let b64 = u.avatarB64, !b64.isEmpty, let data = Data(base64Encoded: b64) {
-            cloudAvatar = UIImage(data: data)
+            let cloudAvatar = UIImage(data: data)
+            profile.avatarImage = cloudAvatar
+            // 同步到 AvatarStore（不触发上传，避免循环）
+            AvatarStore.shared.restoreFromCloud(cloudAvatar)
         }
-        profile.avatarImage = cloudAvatar
-
-        // 同步到 AvatarStore（不触发上传，避免循环）
-        AvatarStore.shared.restoreFromCloud(cloudAvatar)
 
         // 同步到 ProfileStore（减脂目标 / 身高 / 当前体重）
         ProfileStore.shared.restoreFromCloud(

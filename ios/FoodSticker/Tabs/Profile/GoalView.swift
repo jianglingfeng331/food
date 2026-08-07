@@ -21,7 +21,7 @@ struct GoalView: View {
     private var isSetup: Bool { store.heightCm > 0 && store.currentWeight > 0 }
 
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
                 if isSetup {
                     // BMI 概览
