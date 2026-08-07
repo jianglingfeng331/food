@@ -42,6 +42,8 @@ echo "   Redis 已配置（max 256MB, LRU 淘汰）"
 echo "[4/12] 创建应用目录: $APP_DIR"
 mkdir -p "$APP_DIR" "$STICKER_DIR" "$BACKUP_DIR"
 cp -r "$SCRIPT_DIR"/*.py "$SCRIPT_DIR/requirements.txt" "$APP_DIR/"
+# 复制环境变量模板（生产 .env 基于它生成）
+cp "$SCRIPT_DIR/.env.example" "$APP_DIR/" 2>/dev/null || echo "    (无 .env.example，跳过)"
 # 复制 Alembic 迁移文件
 cp -r "$SCRIPT_DIR/migrations" "$APP_DIR/" 2>/dev/null || echo "    (无 migrations 目录，跳过)"
 cp "$SCRIPT_DIR/alembic.ini" "$APP_DIR/" 2>/dev/null || echo "    (无 alembic.ini，跳过)"

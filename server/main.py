@@ -59,7 +59,6 @@ if _redis_url:
         import redis as _r
         _redis_conn = _r.from_url(_redis_url, socket_timeout=2)
         _redis_conn.ping()
-        from slowapi.extension import _get_redis_backend
         limiter = Limiter(key_func=get_remote_address, storage_uri=_redis_url)
         logger.info("限流器已升级为 Redis 分布式模式")
     except Exception as e:
