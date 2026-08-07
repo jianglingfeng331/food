@@ -53,13 +53,13 @@
 		B400000000000000000004 /* AuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000004 /* AuthCoordinator.swift */; };
 		B400000000000000000005 /* AuthGateViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000005 /* AuthGateViewController.swift */; };
 		B400000000000000000006 /* RegisterViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000006 /* RegisterViewController.swift */; };
-		B40000000000000000000C /* CloudAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000C /* CloudAuthProvider.swift */; };
-		B40000000000000000000D /* RegisterByPasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000D /* RegisterByPasswordViewController.swift */; };
 		B400000000000000000007 /* QRCoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000007 /* QRCoder.swift */; };
 		B400000000000000000008 /* QRScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000008 /* QRScannerViewController.swift */; };
 		B400000000000000000009 /* MyQRCodeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F400000000000000000009 /* MyQRCodeViewController.swift */; };
 		B40000000000000000000A /* PKRelationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000A /* PKRelationService.swift */; };
 		B40000000000000000000B /* PKBindingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000B /* PKBindingCoordinator.swift */; };
+		B40000000000000000000C /* CloudAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000C /* CloudAuthProvider.swift */; };
+		B40000000000000000000D /* RegisterByPasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000D /* RegisterByPasswordViewController.swift */; };
 		B410000000000000000001 /* AvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000001 /* AvatarStore.swift */; };
 		B410000000000000000002 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000002 /* AvatarView.swift */; };
 		B410000000000000000003 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F410000000000000000003 /* ProfileView.swift */; };
@@ -73,6 +73,7 @@
 		B700000000000000000001 /* RepositoryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = F700000000000000000001 /* RepositoryProtocol.swift */; };
 		B700000000000000000002 /* MockRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F700000000000000000002 /* MockRepository.swift */; };
 		B700000000000000000003 /* RemoteRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F700000000000000000003 /* RemoteRepository.swift */; };
+		C26CAC4830261FF7007B449D /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = C26CAC4730261FF7007B449D /* Log.swift */; };
 		X1A0000000000000000A0 /* FoodNutritionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A0 /* FoodNutritionModel.swift */; };
 		X1A0000000000000000A1 /* VisionSegmentationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A1 /* VisionSegmentationHelper.swift */; };
 		X1A0000000000000000A2 /* FoodNutritionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = X2A0000000000000000A2 /* FoodNutritionService.swift */; };
@@ -83,6 +84,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		C26CAC4730261FF7007B449D /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		F100000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F100000000000000000002 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		F100000000000000000003 /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
@@ -131,13 +133,13 @@
 		F400000000000000000004 /* AuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthCoordinator.swift; sourceTree = "<group>"; };
 		F400000000000000000005 /* AuthGateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthGateViewController.swift; sourceTree = "<group>"; };
 		F400000000000000000006 /* RegisterViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterViewController.swift; sourceTree = "<group>"; };
-		F40000000000000000000C /* CloudAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAuthProvider.swift; sourceTree = "<group>"; };
-		F40000000000000000000D /* RegisterByPasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterByPasswordViewController.swift; sourceTree = "<group>"; };
 		F400000000000000000007 /* QRCoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCoder.swift; sourceTree = "<group>"; };
 		F400000000000000000008 /* QRScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerViewController.swift; sourceTree = "<group>"; };
 		F400000000000000000009 /* MyQRCodeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyQRCodeViewController.swift; sourceTree = "<group>"; };
 		F40000000000000000000A /* PKRelationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKRelationService.swift; sourceTree = "<group>"; };
 		F40000000000000000000B /* PKBindingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PKBindingCoordinator.swift; sourceTree = "<group>"; };
+		F40000000000000000000C /* CloudAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAuthProvider.swift; sourceTree = "<group>"; };
+		F40000000000000000000D /* RegisterByPasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterByPasswordViewController.swift; sourceTree = "<group>"; };
 		F410000000000000000001 /* AvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStore.swift; sourceTree = "<group>"; };
 		F410000000000000000002 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		F410000000000000000003 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -393,6 +395,7 @@
 				F10000000000000000001E /* LucideIcons.swift */,
 				F410000000000000000001 /* AvatarStore.swift */,
 				F410000000000000000002 /* AvatarView.swift */,
+				C26CAC4730261FF7007B449D /* Log.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -528,6 +531,7 @@
 				X1A0000000000000000A3 /* EmojiStickerGenerator.swift in Sources */,
 				X1A0000000000000000A4 /* FoodStickerCaptureProcessor.swift in Sources */,
 				X1A0000000000000000A5 /* FoodStickerResultViewController.swift in Sources */,
+				C26CAC4830261FF7007B449D /* Log.swift in Sources */,
 				X1A0000000000000000A6 /* StickerResultView.swift in Sources */,
 				B400000000000000000001 /* AuthModels.swift in Sources */,
 				B400000000000000000002 /* MockAuthProvider.swift in Sources */,

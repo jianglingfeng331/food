@@ -13,14 +13,15 @@ final class CloudAPI {
     /// - 模拟器：localhost:8000 直接映射到 Mac 本地。
     /// - 真机 WiFi 联调：必须用 Mac 当前局域网 IP（查询：ifconfig en0 | grep inet）。
     /// - 真机 USB 联调：用 pymobiledevice3 usbmux forward 转发后改回 localhost:8000。
+    /// - ⚠️ 内测期间临时指向生产服务器，内测结束后改回局域网 IP。
     #if DEBUG
     private var base: URL {
         #if targetEnvironment(simulator)
         // 模拟器直接访问 Mac 本地后端
         return URL(string: "http://127.0.0.1:8000")!
         #else
-        // 真机需要用局域网 IP，用户可在此修改
-        return URL(string: "http://192.168.21.228:8000")!
+        // 真机内测：临时指向生产服务器
+        return URL(string: "https://www.rubyace.love")!
         #endif
     }
     #else
