@@ -846,17 +846,26 @@ final class AppDataStore: ObservableObject {
         }
     }
 
-    /// 将 FoodSticker 异步上传到贴纸仓库（仅 preset 时调用）
+    /// 将 FoodSticker 异步上传到贴纸仓库（保存/预设都调用）
     func uploadFoodStickerToRepo(_ sticker: FoodSticker) {
+        Log("[AppDataStore] uploadFoodStickerToRepo 开始, name=\(sticker.name), hasImage=\(sticker.uiImage != nil)")
+        // 确保使用远程仓库（避免登录后未 refresh 时仍为 Mock）
+        if !(stickerRepo is RemoteStickerRepository) {
+            Log("[AppDataStore] stickerRepo 是 Mock, 切换为 Remote")
+            useRemoteRepositories()
+        }
+        Log("[AppDataStore] 当前 stickerRepo 类型: \(type(of: stickerRepo))")
         let repo = stickerRepo
         Task {
             do {
                 let nutrition = sticker.toStickerNutrition()
+                Log("[AppDataStore] 调用 repo.uploadSticker...")
                 _ = try await repo.uploadSticker(
                     image: sticker.uiImage ?? UIImage(),
                     name: sticker.name,
                     nutrition: nutrition
                 )
+                Log("[AppDataStore] Sticker 上传成功!")
             } catch {
                 Log("[AppDataStore] Sticker upload to repo failed: \(error)")
             }

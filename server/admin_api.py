@@ -107,15 +107,21 @@ def _record_to_dict(r: Record) -> dict:
 
 
 def _sticker_to_dict(st: Sticker, s=None) -> dict:
+    import base64 as _b64
     user_name = ""
     image_url = ""
     if st.user_id and s:
         u = s.get(User, st.user_id)
         if u:
             user_name = u.name
+    # 读取贴纸图片并转为 data URI（避免 nginx 路由 + img 认证问题）
     if st.image_path:
-        image_url = f"/admin/stickers/image/{st.id}"
-    elif st.image_b64:
+        full_path = os.path.join(STICKER_DIR, st.image_path)
+        if os.path.exists(full_path):
+            with open(full_path, "rb") as f:
+                b64 = _b64.b64encode(f.read()).decode()
+                image_url = f"data:image/png;base64,{b64}"
+    if not image_url and st.image_b64:
         image_url = f"data:image/png;base64,{st.image_b64}"
     return {
         "id": st.id,

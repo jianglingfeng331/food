@@ -622,22 +622,24 @@ struct StickerResultView: View {
             salt: sticker.salt,
             tip: sticker.tip))
 
-        // 3) 仅「保存并预设」才进入预设列表，避免「保存」误存到预设
+        // 3) 上传贴纸到云端（无论是否预设都上传）
+        let store = AppDataStore.shared
+        store.uploadFoodStickerToRepo(sticker)
+
+        // 4) 仅「保存并预设」才加入本地预设列表
         if preset {
-            let store = AppDataStore.shared
             store.addSavedSticker(sticker)
-            store.uploadFoodStickerToRepo(sticker)
         }
 
-        // 4) 将最终营养数据缓存到 state（remove 后 task 为 nil，nutrition 需要回退源）
+        // 5) 将最终营养数据缓存到 state（remove 后 task 为 nil，nutrition 需要回退源）
         state.manualNutrition = finalNutrition
 
-        // 5) 缩略图消失；详情页停留并立即回显最新数据（已保存）
+        // 6) 缩略图消失；详情页停留并立即回显最新数据（已保存）
         state.saved = true
         CaptureStore.shared.remove(taskID)
         showToast(preset ? "已保存并加入预设，可在「选择已有」选用" : "已保存到今日贴纸与胃袋")
 
-        // 6) 关闭页面回到拍摄页：本页由 UIKit 以 fullScreen modal present，
+        // 7) 关闭页面回到拍摄页：本页由 UIKit 以 fullScreen modal present，
         //    @Environment(.dismiss) 无效，必须用 UIKit 的 closeSelf() 关闭宿主控制器，
         //    使底层 Tab 在重新出现时 viewWillAppear 触发 → 刷新今日记录/大胃袋
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {

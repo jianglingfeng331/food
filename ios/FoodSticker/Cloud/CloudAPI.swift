@@ -158,7 +158,9 @@ final class CloudAPI {
             throw CloudError.unauthorized
         }
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let msg = (try? JSONDecoder().decode([String: String].self, from: data))?["detail"] ?? "请求失败"
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            Log("[CloudAPI] authed 失败: \(path) status=\(http.statusCode) body=\(bodyStr.prefix(500))")
+            let msg = (try? JSONDecoder().decode([String: String].self, from: data))?["detail"] ?? "请求失败(\(http.statusCode))"
             throw CloudError.server(msg)
         }
         return data
