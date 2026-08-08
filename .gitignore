@@ -65,3 +65,5 @@ server/foodsticker.db
 
 # ===== Logs =====
 *.log
+admin/node_modules/
+admin/dist/

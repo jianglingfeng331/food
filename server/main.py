@@ -73,6 +73,10 @@ app.state.limiter = limiter
 # ── Prometheus 指标采集 ──
 Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
+# ── 管理后台 API ──
+from admin_api import router as admin_router
+app.include_router(admin_router)
+
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
