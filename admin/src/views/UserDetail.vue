@@ -161,6 +161,8 @@
                         :src="recordImage(row)"
                         class="record-img"
                         :preview-src-list="[recordImage(row)]"
+                        :z-index="99999"
+                        preview-teleported
                         fit="cover"
                         hide-on-click-modal
                       />

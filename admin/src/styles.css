@@ -118,3 +118,8 @@ a {
 .empty-avatar {
   color: #c0c4cc;
 }
+
+/* 图片预览大图层级：高于 el-dialog */
+.el-image-viewer__wrapper {
+  z-index: 9999 !important;
+}

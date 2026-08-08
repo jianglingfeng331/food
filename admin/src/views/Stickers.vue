@@ -40,6 +40,8 @@
                 class="sticker-thumb"
                 fit="cover"
                 :preview-src-list="stickerImage(row) ? [stickerImage(row)] : []"
+                :z-index="99999"
+                preview-teleported
                 hide-on-click-modal
               >
                 <template #error>
